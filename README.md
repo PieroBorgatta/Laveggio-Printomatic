@@ -23,6 +23,7 @@ una fase successiva, inviare il peso al gestionale di pesatura.
 | [`docs/wiring.md`](docs/wiring.md) | Documentato | Schema testuale e avvertenze sui colori dei cavetti |
 | [`docs/production-architecture.md`](docs/production-architecture.md) | Proposta | Flusso ESP32, backend e kiosk |
 | [`docs/test-results.md`](docs/test-results.md) | Aggiornato | Risultati osservati e limiti ancora aperti |
+| [`stl`](stl/) | In sviluppo | Case e supporti stampabili in 3D, separati per autore e licenza |
 
 ## Hardware utilizzato
 
@@ -68,8 +69,26 @@ durata, stato del bus, angolo, AGC e magnitudine.
 - Wi-Fi, protocollo verso backend, calibrazione persistente e integrazione kiosk
   restano da sviluppare.
 
+## Parti stampabili in 3D
+
+La cartella [`stl/`](stl/) distingue due provenienze:
+
+- `third-party`: modelli scaricati da terzi, conservati con attribuzione, fonte
+  e licenza originali;
+- `original-designs`: futuri case e supporti progettati specificamente per
+  Laveggio Printomatic da Piero Borgatta. I collegamenti MakerWorld saranno
+  aggiunti quando i modelli verranno pubblicati.
+
+Il case attualmente presente per il multiplexer Adafruit deriva dal modello
+[Enclosure for Adafruit 4ch QT Mux 5664 PCA9546](https://www.printables.com/model/658753-enclosure-for-adafruit-4ch-qt-mux-5664-pca9546/files)
+di OpenSensor.io ed è distribuito dall'autore con licenza CC BY-NC-SA 4.0.
+
 ## Licenza
 
 Salvo indicazione diversa nei singoli file, il progetto è distribuito con
 licenza [Creative Commons Attribution 4.0 International](LICENSE). È richiesta
 l'attribuzione a Piero Borgatta e ai contributori del progetto.
+
+Gli STL di terzi non sono coperti dalla licenza generale del repository: fanno
+fede il relativo README, il file di licenza nella loro cartella e
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
