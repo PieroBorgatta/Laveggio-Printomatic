@@ -1,0 +1,24 @@
+# Arduino generated output
+build/
+*.bin
+*.elf
+*.map
+*.hex
+*.uf2
+
+# Arduino IDE / editors
+.arduinoIDE/
+.vscode/
+.idea/
+*.swp
+*.tmp
+
+# Local configuration and secrets
+.env
+.env.*
+secrets.h
+credentials.h
+
+# Operating systems
+Thumbs.db
+.DS_Store

@@ -1,0 +1,46 @@
+# Risultati delle prove
+
+## Ambiente osservato
+
+- Waveshare ESP32-C6-LCD-1.47 collegata via USB-C;
+- multiplexer rilevato a `0x70`;
+- un AS5600 collegato al canale 0 durante l'ultima prova;
+- SDA GPIO 1, SCL GPIO 2;
+- I2C a 100 kHz;
+- seriale a 115200 baud.
+
+## Risultati confermati
+
+- compilazione completata con core Arduino ESP32;
+- caricamento su ESP32-C6 completato e verificato dall'utility di flash;
+- display inizializzato e aggiornamento limitato alle righe modificate;
+- multiplexer e AS5600 raggiungibili;
+- scansione aggregata osservata circa 80–101 volte al secondo;
+- durata di una scansione completa osservata circa 4,2–5,9 ms;
+- magnete rimosso: `raw=0`, `MD=false`, `ML=true`, magnitudine circa 0–1;
+- magnete vicino: `raw` circa 3215–3221, `MD=true`, `ML=true`, magnitudine
+  circa 1080–1100.
+
+## Cosa non è ancora validato
+
+Non è ancora stata registrata una rotazione controllata che percorra l'intero
+intervallo 0–4095. Il display è aggiornato quando il valore letto cambia, ma
+l'ultima configurazione magnetica ha prodotto variazioni minime e un flag di
+campo debole.
+
+Prima di usare il sistema sulla pesa occorre:
+
+1. confermare che il magnete sia diametralmente magnetizzato;
+2. definire centraggio e distanza meccanicamente ripetibili;
+3. registrare min/max e traiettoria durante almeno dieci giri completi;
+4. verificare separatamente tutti e quattro i sensori;
+5. montare i sensori e registrare ogni scatto meccanico;
+6. misurare gioco, isteresi, vibrazioni e deriva termica;
+7. verificare che la lettura digitale coincida sempre con l'indicazione
+   meccanica prima dell'integrazione gestionale.
+
+## Nota metodologica
+
+La frequenza del ciclo non dimostra da sola che l'esperienza sul display sia
+corretta. Le prossime prove devono acquisire contemporaneamente valore grezzo,
+minimo, massimo, numero di variazioni e video/riscontro visivo del magnete.
