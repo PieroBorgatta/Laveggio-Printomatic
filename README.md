@@ -26,13 +26,15 @@ una fase successiva, inviare il peso al gestionale di pesatura.
 
 ## Hardware utilizzato
 
-- [Waveshare ESP32-C6-LCD-1.47](https://docs.waveshare.com/ESP32-C6-LCD-1.47?variant=ESP32-C6-LCD-1.47)
-- [Adafruit PCA9546 / TCA9546A, multiplexer I2C STEMMA QT a 4 canali](https://learn.adafruit.com/adafruit-pca9546-4-channel-stemma-qt-multiplexer/pinouts)
-- 4 moduli AS5600 a 12 bit, indirizzo I2C fisso `0x36`
+- [Waveshare ESP32-C6-LCD-1.47 — acquisto Amazon](https://www.amazon.it/dp/B0DHTMYTCY)
+- [Adafruit PCA9546 / TCA9546A, multiplexer I2C STEMMA QT a 4 canali — acquisto Amazon](https://www.amazon.it/dp/B0BSG8KX8L)
+- [Kit di 4 moduli AS5600 a 12 bit con magneti — acquisto Amazon](https://www.amazon.it/dp/B0FH1Y3GLG)
+- [5 coppie di cavetti micro JST-SH 1.0 mm, 4 pin — acquisto Amazon](https://www.amazon.it/dp/B0BNCHC5Q4)
+- [Documentazione Waveshare ESP32-C6-LCD-1.47](https://docs.waveshare.com/ESP32-C6-LCD-1.47?variant=ESP32-C6-LCD-1.47)
+- [Pinout Adafruit PCA9546 / TCA9546A](https://learn.adafruit.com/adafruit-pca9546-4-channel-stemma-qt-multiplexer/pinouts)
 - [Manuale del modulo AS5600 utilizzato come riferimento](https://manuals.plus/asin/B0FH2G8PLS)
 - [Datasheet ufficiale ams OSRAM AS5600](https://look.ams-osram.com/m/7059eac7531a86fd/original/AS5600-DS000365.pdf)
-- 4 magneti diametralmente magnetizzati compatibili con AS5600
-- Cavetti e connettori JST-SH/STEMMA QT, alimentazione USB-C
+- Alimentazione USB-C
 
 Il multiplexer del prototipo risponde a `0x70`; ogni AS5600 risponde a `0x36`
 all'interno del proprio canale isolato.

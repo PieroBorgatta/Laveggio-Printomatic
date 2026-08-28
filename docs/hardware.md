@@ -1,5 +1,19 @@
 # Hardware
 
+## Distinta materiali acquistata
+
+| Componente | Quantità prevista | Link di acquisto |
+| --- | ---: | --- |
+| Waveshare ESP32-C6 con display LCD da 1,47 pollici | 1 | [Amazon.it — ASIN B0DHTMYTCY](https://www.amazon.it/dp/B0DHTMYTCY) |
+| Adafruit multiplexer STEMMA QT/Qwiic I2C a 4 canali, compatibile TCA9546A | 1 | [Amazon.it — ASIN B0BSG8KX8L](https://www.amazon.it/dp/B0BSG8KX8L) |
+| Kit AYWHP con 4 moduli AS5600 a 12 bit e magneti | 1 kit | [Amazon.it — ASIN B0FH1Y3GLG](https://www.amazon.it/dp/B0FH1Y3GLG) |
+| Cavetti micro JST-SH 1.0 mm a 4 pin, maschio/femmina, confezione da 5 coppie | 1 confezione | [Amazon.it — ASIN B0BNCHC5Q4](https://www.amazon.it/dp/B0BNCHC5Q4) |
+
+I link identificano gli articoli effettivamente indicati per il prototipo. Le
+inserzioni commerciali possono cambiare nel tempo: pinout, tensioni e
+compatibilità devono comunque essere verificati sulla documentazione tecnica e
+sulla serigrafia del componente ricevuto.
+
 ## Componenti principali
 
 ### Waveshare ESP32-C6-LCD-1.47
