@@ -9,19 +9,20 @@ quattro manopole senza modificare il funzionamento meccanico originale e, in
 una fase successiva, inviare il peso al gestionale di pesatura.
 
 > [!IMPORTANT]
-> Il repository contiene un firmware diagnostico realmente provato e una
-> specifica del futuro firmware operativo. L'invio Wi-Fi al gestionale **non è
-> ancora implementato** e non viene presentato come funzionante.
+> Il repository contiene il firmware diagnostico provato sul dispositivo e il
+> gateway operativo completo, compilato per ESP32-C6 e verificato tramite
+> simulatore host. Cablaggio, sensori, microSD, Wi-Fi e integrazione backend del
+> gateway operativo devono ancora essere collaudati sull'hardware reale.
 
 ## Struttura del progetto
 
 | Area | Stato | Contenuto |
 | --- | --- | --- |
 | [`firmware/calibration-reader`](firmware/calibration-reader/) | In prova | Lettura dei quattro canali, diagnostica I2C/AS5600 e visualizzazione locale |
-| [`firmware/production-gateway`](firmware/production-gateway/) | Da implementare | Requisiti del firmware definitivo Wi-Fi e integrazione gestionale |
+| [`firmware/production-gateway`](firmware/production-gateway/) | Implementato, da collaudare | Firmware Wi-Fi, calibrazione web, storico microSD, OTA e integrazione backend |
 | [`docs/hardware.md`](docs/hardware.md) | Documentato | Componenti e collegamenti di riferimento |
 | [`docs/wiring.md`](docs/wiring.md) | Documentato | Schema testuale e avvertenze sui colori dei cavetti |
-| [`docs/production-architecture.md`](docs/production-architecture.md) | Proposta | Flusso ESP32, backend e kiosk |
+| [`docs/production-architecture.md`](docs/production-architecture.md) | Implementato lato dispositivo | Flusso ESP32, contratto backend e regole kiosk |
 | [`docs/test-results.md`](docs/test-results.md) | Aggiornato | Risultati osservati e limiti ancora aperti |
 | [`stl`](stl/) | In sviluppo | Case e supporti stampabili in 3D, separati per autore e licenza |
 
@@ -66,8 +67,13 @@ durata, stato del bus, angolo, AGC e magnitudine.
 - Durante le ultime prove è stato rilevato un campo magnetico debole e una
   variazione angolare limitata. La validazione meccanica con magnete centrato e
   diametrale resta da completare.
-- Wi-Fi, protocollo verso backend, calibrazione persistente e integrazione kiosk
-  restano da sviluppare.
+- Gateway Wi-Fi, calibrazione persistente, storico microSD, interfaccia web,
+  aggiornamento OTA e pubblicazione HTTPS verso il backend sono implementati.
+- L'integrazione nel gestionale non appartiene a questo repository: il relativo
+  contratto è in
+  [`docs/casklogic-integration-contract.md`](docs/casklogic-integration-contract.md).
+- Il gateway operativo è stato compilato e testato virtualmente, ma resta da
+  collaudare sul dispositivo e sulla meccanica reale prima dell'uso operativo.
 
 ## Parti stampabili in 3D
 

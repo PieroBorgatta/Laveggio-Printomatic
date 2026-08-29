@@ -1,5 +1,8 @@
 # Arduino generated output
 build/
+.pio/
+output/playwright/
+.playwright-cli/
 *.bin
 *.elf
 *.map
@@ -18,6 +21,9 @@ build/
 .env.*
 secrets.h
 credentials.h
+
+# Local simulator state
+firmware/production-gateway/simulator/.state/
 
 # Operating systems
 Thumbs.db

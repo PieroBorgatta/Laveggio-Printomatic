@@ -1,0 +1,9 @@
+{
+  "name": "laveggio-production-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "simulate": "node simulator/server.mjs",
+    "test": "node --test simulator/server.test.mjs"
+  }
+}

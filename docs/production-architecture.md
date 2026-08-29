@@ -1,7 +1,8 @@
-# Architettura prevista per l'uso operativo
+# Architettura per l'uso operativo
 
-Questo documento descrive la direzione progettuale. Le funzioni di rete e
-integrazione non sono ancora presenti nel firmware.
+Il gateway ESP32 descritto qui è implementato in
+`firmware/production-gateway`. Il backend e il kiosk CaskLogic restano separati
+e non sono modificati da questo progetto.
 
 ## Responsabilità
 
@@ -67,9 +68,9 @@ MANUALE
 Dopo la conferma della pesata successiva, l'interfaccia torna predisposta per
 l'inserimento manuale finché una manopola non viene realmente movimentata.
 
-## Snapshot proposto
+## Snapshot implementato
 
-Il contratto definitivo dovrà essere versionato. Un possibile evento è:
+Il contratto è versionato e ogni evento contiene uno snapshot completo:
 
 ```json
 {
@@ -94,12 +95,11 @@ calibrazione reale.
 
 ## Trasporto
 
-Una connessione WebSocket persistente è adatta agli aggiornamenti immediati e
-bidirezionali. Anche HTTPS POST su rete locale può essere sufficientemente
-rapido, ma richiede keep-alive, gestione degli errori e un canale separato per
-lo stato. La scelta definitiva dovrà includere:
+Il dispositivo usa richieste `HTTPS POST` asincrone rispetto alla scansione dei
+sensori. Il certificato CA deve essere configurato dall'interfaccia web; il
+firmware rifiuta HTTPS privo di una CA attendibile. Il backend deve includere:
 
-- TLS o rete locale protetta;
+- TLS con CA configurata sul dispositivo;
 - autenticazione per dispositivo;
 - heartbeat e timeout di misura scaduta;
 - riconnessione con backoff;

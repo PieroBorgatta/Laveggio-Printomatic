@@ -1,33 +1,103 @@
-# Firmware 2 — gateway operativo verso il gestionale
+# Firmware operativo Laveggio Printomatic
 
-**Stato: non ancora implementato.**
+Firmware completo per la Waveshare ESP32-C6-LCD-1.47. Legge quattro AS5600
+attraverso il PCA9546/TCA9546A, converte le posizioni in peso, registra gli
+eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 
-Questa area sarà dedicata al firmware definitivo. Rimane separata dal lettore
-diagnostico affinché gli strumenti di calibrazione non vengano confusi con il
-software destinato all'uso quotidiano.
+## Funzioni implementate
 
-## Funzioni previste
+- scansione continua dei quattro sensori a 100 kHz;
+- calibrazione persistente delle dieci posizioni di ogni manopola;
+- distanza angolare circolare, tolleranza, isteresi e finestra di stabilita;
+- display locale spento per impostazione predefinita e controllabile dal web;
+- storico append-only e log diagnostici su microSD FAT32;
+- campione diagnostico dei quattro sensori registrato ogni minuto;
+- Wi-Fi DHCP o statico, scansione reti e access point di recupero;
+- autenticazione HTTP Basic dopo il provisioning iniziale;
+- invio asincrono di snapshot completi e heartbeat al futuro backend CaskLogic;
+- certificato CA configurabile e obbligatorio per endpoint HTTPS;
+- rilevazione opzionale della perdita di alimentazione esterna;
+- aggiornamento firmware OTA con doppia partizione;
+- simulatore locale che usa gli stessi file HTML, CSS e JavaScript incorporati.
 
-- caricamento della calibrazione persistente dei quattro sensori;
-- scansione locale continua dei quattro canali;
-- conversione angolo → posizione meccanica con tolleranza e isteresi;
-- conferma di stabilità prima di pubblicare una nuova cifra;
-- calcolo del peso come snapshot completo delle quattro posizioni;
-- connessione Wi-Fi con indirizzo riservato/statico;
-- connessione persistente e riconnessione automatica al backend;
-- invio immediato dello snapshot quando cambia una cifra valida;
-- heartbeat periodico e contatore sequenziale per rilevare disconnessioni o
-  messaggi duplicati;
-- watchdog hardware e diagnostica locale;
-- aggiornamento firmware controllato e configurazione protetta;
-- eventuale riavvio notturno configurabile, utilizzato come protezione
-  secondaria e non come sostituto del watchdog.
+## Compilazione
 
-## Fuori dallo scope del firmware
+Il supporto Arduino ufficiale di PlatformIO non abilita ancora ESP32-C6. Il
+progetto usa quindi la piattaforma comunitaria pioarduino, che installa Arduino
+ESP32 3.x. Su Windows conviene abilitare i percorsi lunghi oppure usare una
+cache corta solo per il comando di build:
 
-È il backend/kiosk, non l'ESP32, a decidere se un peso live deve alimentare il
-campo lordo o tara. L'ESP32 deve pubblicare soltanto una misura completa,
-identificabile e accompagnata dal proprio stato di validità.
+```powershell
+py -m pip install --user platformio
+$env:PLATFORMIO_CORE_DIR = 'C:\pio'
+py -m platformio run
+```
 
-Il contratto previsto è descritto in
-[`../../docs/production-architecture.md`](../../docs/production-architecture.md).
+Artefatti principali:
+
+- `.pio/build/waveshare_esp32c6_lcd_147/firmware.bin`: aggiornamento OTA;
+- `.pio/build/waveshare_esp32c6_lcd_147/firmware.factory.bin`: prima installazione completa.
+
+Misure della build `1.0.0` verificata il 29 agosto 2026:
+
+- RAM statica: `49.532 / 327.680 byte` (`15,1%`);
+- flash applicazione: `1.547.712 / 1.900.544 byte` (`81,4%`).
+
+La RAM allocata dinamicamente per coda HTTPS, task e richieste web non e
+compresa nel primo valore; prima dell'installazione operativa va quindi
+controllato anche l'heap libero esposto nella pagina Sistema.
+
+Il file `include/WebAssets.h` e generato automaticamente da `data/` prima della
+compilazione. Deve essere versionato affinche il contenuto web incorporato resti
+ispezionabile e riproducibile.
+
+## Simulatore e test API
+
+```powershell
+npm test
+npm run simulate
+```
+
+Il simulatore risponde su `http://127.0.0.1:4177` e consente di provare tutte le
+sezioni dell'interfaccia senza la scheda collegata.
+
+## Prima configurazione
+
+Se non trova credenziali Wi-Fi salvate, il dispositivo crea:
+
+- SSID `Laveggio-Setup-XXXXXX`;
+- password `Cask-XXXXXX!`;
+- indirizzo `http://192.168.4.1`.
+
+`XXXXXX` corrisponde alle ultime sei cifre del MAC. Durante questo primo
+provisioning l'interfaccia e raggiungibile solo dalla rete creata dal dispositivo.
+Dopo il salvataggio del Wi-Fi, le pagine richiedono l'utente `admin` e la stessa
+password iniziale; la password va cambiata dalla sezione Sistema.
+
+## File sulla microSD
+
+La scheda deve essere FAT32. Il firmware crea:
+
+```text
+/weights/history.ndjson
+/weights/history-YYYYMMDD-HHMMSS-<uptime>.ndjson
+/logs/system.ndjson
+/logs/system-YYYYMMDD-HHMMSS-<uptime>.ndjson
+```
+
+Lo storico viene scritto soltanto quando tutte le cifre sono valide, la misura
+rimane stabile per la finestra configurata e il peso stabile cambia. I file
+vengono ruotati con nomi univoci e gli archivi non vengono sovrascritti. La
+pagina Storico legge i record piu recenti anche oltre le rotazioni; il comando
+di export concatena in ordine tutti gli archivi NDJSON presenti sulla scheda.
+L'esito di pubblicazione piu recente e visibile nello stato integrazione, mentre
+il record locale rimane immutabile e non costituisce conferma di ricezione.
+La pagina Sistema offre separatamente l'export completo dei log, inclusi i
+campioni periodici di presenza, angolo, stato magnete, AGC e magnitudine.
+
+## Limiti della verifica corrente
+
+La compilazione e i flussi web sono verificabili senza hardware. Restano da
+provare fisicamente: centraggio dei magneti, assorbimento, autonomia UPS,
+scritture reali sulla microSD, commutazione di alimentazione, Wi-Fi del sito,
+display, upload OTA e corrispondenza fra peso meccanico e digitale.

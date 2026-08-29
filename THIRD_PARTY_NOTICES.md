@@ -24,3 +24,11 @@ File inclusi senza modifiche dichiarate:
 I file possono essere condivisi e adattati rispettando attribuzione, uso non
 commerciale e condivisione allo stesso modo. Per eventuali usi commerciali è
 necessaria un'autorizzazione separata del titolare dei diritti.
+
+## Marchio CaskLogic
+
+L'asset `firmware/production-gateway/data/casklogicmark.png` è il marchio
+CaskLogic fornito dal progetto gestionale collegato ed è incluso esclusivamente
+per identificare l'interfaccia del dispositivo. Il marchio non è concesso sotto
+la licenza CC BY 4.0 generale del repository e rimane di proprietà del relativo
+titolare.

@@ -44,3 +44,33 @@ Prima di usare il sistema sulla pesa occorre:
 La frequenza del ciclo non dimostra da sola che l'esperienza sul display sia
 corretta. Le prossime prove devono acquisire contemporaneamente valore grezzo,
 minimo, massimo, numero di variazioni e video/riscontro visivo del magnete.
+
+## Verifica virtuale del gateway operativo
+
+In assenza del dispositivo, il firmware in `firmware/production-gateway` è
+stato verificato con strumenti host:
+
+- compilazione PlatformIO per `esp32-c6-devkitc-1` con Arduino ESP32;
+- RAM statica `49.532 / 327.680 byte` (`15,1%`);
+- flash applicazione `1.547.712 / 1.900.544 byte` (`81,4%`);
+- generazione automatica e inclusione degli asset web nel binario;
+- test Node.js del simulatore REST e delle regole di configurazione;
+- 11 test Node.js superati su API, segreti, calibrazione, storico e log;
+- controllo sintattico del JavaScript eseguito nel browser;
+- verifica browser dell'interfaccia desktop e mobile tramite Playwright;
+- viewport verificati: `1440x1000` e `390x844`, tema chiaro e scuro;
+- controllo dei flussi display, calibrazione, storico e impostazioni.
+
+Queste prove verificano compilabilità, logica indipendente dall'hardware,
+contratto HTTP e comportamento dell'interfaccia. Non verificano fisicamente:
+
+- presenza e scrittura della microSD;
+- letture I2C dei quattro AS5600 attraverso il TCA9546A;
+- inizializzazione e resa del display ST7789;
+- stabilità della rete Wi-Fi sull'impianto;
+- aggiornamento OTA e ripristino dopo un'interruzione reale;
+- autonomia o commutazione dell'eventuale alimentazione di backup;
+- consegna degli eventi a un backend CaskLogic, che non è stato modificato.
+
+Le misure finali di RAM e flash della build sono riportate nel README del
+gateway operativo e devono essere ricontrollate a ogni rilascio.

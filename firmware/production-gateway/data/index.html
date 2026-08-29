@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0e1520">
+  <title>Laveggio Printomatic</title>
+  <link rel="icon" href="/casklogicmark.png">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/casklogicmark.png" alt="CaskLogic">
+        <div><strong>CaskLogic</strong><span>Laveggio Printomatic</span></div>
+      </div>
+      <nav class="nav" aria-label="Sezioni">
+        <button class="nav-button active" data-view="dashboard"><span>01</span>Riepilogo</button>
+        <button class="nav-button" data-view="calibration"><span>02</span>Calibrazione</button>
+        <button class="nav-button" data-view="history"><span>03</span>Storico</button>
+        <button class="nav-button" data-view="settings"><span>04</span>Rete e gestionale</button>
+        <button class="nav-button" data-view="system"><span>05</span>Sistema</button>
+      </nav>
+      <div class="sidebar-status">
+        <span class="status-dot" id="sidebar-dot"></span>
+        <div><strong id="sidebar-state">Connessione...</strong><span id="sidebar-address">--</span></div>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Bilico meccanico digitale</p>
+          <h1 id="page-title">Riepilogo dispositivo</h1>
+        </div>
+        <div class="topbar-actions">
+          <span class="live-chip"><span class="status-dot"></span><span id="last-update">Live</span></span>
+          <button class="icon-button" id="theme-toggle" title="Cambia tema" aria-label="Cambia tema">◐</button>
+        </div>
+      </header>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+      <section class="view active" id="view-dashboard">
+        <div class="weight-band">
+          <div>
+            <p class="eyebrow">Peso rilevato</p>
+            <div class="weight-value"><span id="weight">-----</span><small>kg</small></div>
+            <div class="state-line"><span class="state-pill neutral" id="weight-state">In attesa</span><span id="stable-time">--</span></div>
+          </div>
+          <div class="weight-actions">
+            <label class="switch-row" for="display-toggle">
+              <span><strong>Display locale</strong><small>Retroilluminazione della scheda</small></span>
+              <input type="checkbox" id="display-toggle"><span class="switch"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric"><span>Wi-Fi</span><strong id="metric-wifi">--</strong><small id="metric-rssi">--</small></article>
+          <article class="metric"><span>Gestionale</span><strong id="metric-backend">--</strong><small id="metric-sequence">--</small></article>
+          <article class="metric"><span>MicroSD</span><strong id="metric-sd">--</strong><small id="metric-storage">--</small></article>
+          <article class="metric"><span>Alimentazione</span><strong id="metric-power">--</strong><small id="metric-uptime">--</small></article>
+        </div>
+
+        <div class="section-heading"><div><p class="eyebrow">Acquisizione</p><h2>Sensori AS5600</h2></div><span id="scan-rate">-- scansioni/s</span></div>
+        <div class="sensor-grid" id="sensor-grid"></div>
+      </section>
+
+      <section class="view" id="view-calibration">
+        <div class="section-heading"><div><p class="eyebrow">Taratura guidata</p><h2>Posizioni delle manopole</h2></div><span class="state-pill neutral" id="calibration-summary">0/40 punti</span></div>
+        <div class="calibration-layout">
+          <div class="panel sensor-selector" id="calibration-channels"></div>
+          <div class="panel calibration-workspace">
+            <div class="calibration-live">
+              <div><span>Canale selezionato</span><strong id="cal-channel-name">Sensore 1</strong></div>
+              <div><span>Valore corrente</span><strong id="cal-live-raw">----</strong></div>
+              <div><span>Qualità magnete</span><strong id="cal-live-quality">--</strong></div>
+            </div>
+            <div class="position-grid" id="position-grid"></div>
+            <form id="calibration-form" class="compact-form">
+              <label><span>Moltiplicatore kg</span><input name="multiplier" type="number" min="1" max="100000" required></label>
+              <label><span>Tolleranza</span><input name="tolerance" type="number" min="10" max="1024" required></label>
+              <label><span>Isteresi</span><input name="hysteresis" type="number" min="0" max="512" required></label>
+              <div class="form-actions"><button class="button secondary" type="button" id="reset-calibration">Azzera canale</button><button class="button primary" type="submit">Salva parametri</button></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="section-heading"><div><p class="eyebrow">Registro locale</p><h2>Pesate rilevate</h2></div><a class="button secondary" href="/api/history/export" download>Esporta NDJSON</a></div>
+        <div class="panel table-panel"><table><thead><tr><th>Data e ora</th><th>Peso</th><th>Cifre</th><th>Sequenza</th><th>Invio</th></tr></thead><tbody id="history-body"></tbody></table><div class="empty" id="history-empty">Nessuna pesata registrata</div></div>
+      </section>
+
+      <section class="view" id="view-settings">
+        <div class="settings-grid">
+          <form class="panel form-panel" id="network-form">
+            <div class="panel-heading"><div><p class="eyebrow">Connettività</p><h2>Rete Wi-Fi</h2></div><button class="button secondary small" type="button" id="wifi-scan">Cerca reti</button></div>
+            <div id="wifi-results" class="wifi-results"></div>
+            <label><span>Nome rete</span><input name="wifi_ssid" autocomplete="off"></label>
+            <label><span>Password Wi-Fi</span><input name="wifi_password" type="password" autocomplete="new-password" placeholder="Lascia vuoto per non modificarla"></label>
+            <label class="check-row"><input name="use_dhcp" type="checkbox"><span><strong>Configurazione automatica DHCP</strong><small>Disattivare per usare indirizzi statici</small></span></label>
+            <div class="ip-grid" id="static-fields">
+              <label><span>Indirizzo IP</span><input name="static_ip" inputmode="decimal"></label>
+              <label><span>Gateway</span><input name="gateway" inputmode="decimal"></label>
+              <label><span>Subnet mask</span><input name="subnet" inputmode="decimal"></label>
+              <label><span>DNS</span><input name="dns" inputmode="decimal"></label>
+            </div>
+            <button class="button primary" type="submit">Salva rete</button>
+          </form>
+
+          <form class="panel form-panel" id="integration-form">
+            <div class="panel-heading"><div><p class="eyebrow">CaskLogic</p><h2>Integrazione gestionale</h2></div><span class="state-pill neutral" id="integration-state">Non configurata</span></div>
+            <label><span>ID dispositivo</span><input name="device_id" autocomplete="username" required></label>
+            <label><span>Endpoint eventi</span><input name="backend_url" type="url" placeholder="https://gestionale/api/..."></label>
+            <label><span>Token dispositivo</span><input name="backend_token" type="password" autocomplete="new-password" placeholder="Lascia vuoto per non modificarlo"></label>
+            <label><span>Certificato CA per HTTPS</span><textarea name="tls_ca_certificate" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
+            <label><span>Endpoint notifiche</span><input name="notification_url" type="url" placeholder="Opzionale"></label>
+            <div class="ip-grid">
+              <label><span>Stabilità ms</span><input name="stable_ms" type="number" min="100" max="5000"></label>
+              <label><span>Heartbeat secondi</span><input name="heartbeat_seconds" type="number" min="5" max="3600"></label>
+            </div>
+            <button class="button primary" type="submit">Salva integrazione</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="view" id="view-system">
+        <div class="settings-grid">
+          <form class="panel form-panel" id="system-form">
+            <div class="panel-heading"><div><p class="eyebrow">Dispositivo</p><h2>Impostazioni di sistema</h2></div></div>
+            <label><span>Nome host</span><input name="hostname" required></label>
+            <label><span>Server NTP</span><input name="ntp_server" required></label>
+            <label><span>Fuso orario POSIX</span><input name="timezone" required></label>
+            <label><span>Utente amministratore</span><input name="admin_user" autocomplete="username" required></label>
+            <label><span>Nuova password</span><input name="admin_password" type="password" autocomplete="new-password" minlength="8" placeholder="Lascia vuoto per non modificarla"></label>
+            <label class="check-row"><input name="display_default_on" type="checkbox"><span><strong>Display acceso dopo il riavvio</strong><small>Predefinito consigliato: spento</small></span></label>
+            <label class="check-row"><input name="power_sense_enabled" type="checkbox"><span><strong>Rilevamento rete elettrica</strong><small>Richiede ingresso protetto su GPIO20</small></span></label>
+            <button class="button primary" type="submit">Salva sistema</button>
+          </form>
+
+          <div class="panel form-panel">
+            <div class="panel-heading"><div><p class="eyebrow">Manutenzione</p><h2>Firmware e diagnostica</h2></div></div>
+            <dl class="details" id="system-details"></dl>
+            <form id="ota-form" class="upload-box"><label><span>Aggiornamento firmware</span><input name="firmware" type="file" accept=".bin" required></label><button class="button secondary" type="submit">Carica firmware</button></form>
+            <div class="log-box" id="system-log">Caricamento diagnostica...</div>
+            <a class="button secondary" href="/api/logs/export" download>Esporta log completi</a>
+            <button class="button danger" type="button" id="restart-device">Riavvia dispositivo</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h2 id="dialog-title">Conferma operazione</h2>
+      <p id="dialog-message"></p>
+      <div class="form-actions"><button class="button secondary" value="cancel">Annulla</button><button class="button danger" value="confirm">Conferma</button></div>
+    </form>
+  </dialog>
+  <script src="/app.js"></script>
+</body>
+</html>
