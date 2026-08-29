@@ -1,102 +1,216 @@
-# Laveggio Printomatic
+<p align="center">
+  <img src="firmware/production-gateway/data/casklogicmark.png" width="112" alt="CaskLogic">
+</p>
 
-Digitalizzazione non invasiva del selettore di peso di un bilico meccanico
-Laveggio Printomatic del 1965.
+<h1 align="center">Laveggio Printomatic</h1>
 
-Il progetto usa quattro sensori magnetici AS5600, un multiplexer I2C a quattro
-canali e una scheda Waveshare ESP32-C6-LCD-1.47. L'obiettivo è leggere le
-quattro manopole senza modificare il funzionamento meccanico originale e, in
-una fase successiva, inviare il peso al gestionale di pesatura.
+<p align="center">
+  Gateway ESP32-C6 per la digitalizzazione non invasiva di un bilico meccanico
+  Laveggio Printomatic del 1965.
+</p>
+
+<p align="center">
+  <img alt="Firmware 1.2.0" src="https://img.shields.io/badge/firmware-1.2.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="ESP32-C6" src="https://img.shields.io/badge/ESP32--C6-Wi--Fi_6-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
+  <img alt="Test 20 su 20" src="https://img.shields.io/badge/test-20%2F20_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+</p>
+
+<p align="center">
+  <a href="#-panoramica">Panoramica</a> ·
+  <a href="#-funzioni">Funzioni</a> ·
+  <a href="#-hardware">Hardware</a> ·
+  <a href="#-avvio-rapido">Avvio rapido</a> ·
+  <a href="#-sicurezza">Sicurezza</a> ·
+  <a href="#-documentazione">Documentazione</a>
+</p>
+
+---
+
+![Dashboard Laveggio Printomatic](docs/assets/laveggio-dashboard.png)
+
+## 🧭 Panoramica
+
+Laveggio Printomatic legge quattro manopole meccaniche attraverso sensori
+magnetici AS5600, ricostruisce il peso stabile e conserva lo storico su
+microSD. La Waveshare ESP32-C6-LCD-1.47 espone un portale web CaskLogic per
+calibrazione, diagnostica, manutenzione e integrazione con il gestionale.
+
+Il sistema non altera la meccanica originale e mantiene sempre disponibile la
+lettura locale. Il gestionale CaskLogic rimane un componente separato: questo
+repository contiene firmware, simulatore, contratto di integrazione e
+documentazione hardware.
 
 > [!IMPORTANT]
-> Il repository contiene il firmware diagnostico provato sul dispositivo e il
-> gateway operativo completo, compilato per ESP32-C6 e verificato tramite
-> simulatore host. Cablaggio, sensori, microSD, Wi-Fi e integrazione backend del
-> gateway operativo devono ancora essere collaudati sull'hardware reale.
+> Firmware e interfaccia sono compilati e verificati virtualmente. Sensori,
+> microSD, batteria, commutazione di alimentazione, Wi-Fi del sito e rollback
+> OTA devono ancora essere collaudati insieme sull'hardware definitivo.
 
-## Struttura del progetto
+## ✦ Funzioni
 
-| Area | Stato | Contenuto |
-| --- | --- | --- |
-| [`firmware/calibration-reader`](firmware/calibration-reader/) | In prova | Lettura dei quattro canali, diagnostica I2C/AS5600 e visualizzazione locale |
-| [`firmware/production-gateway`](firmware/production-gateway/) | Implementato, da collaudare | Firmware Wi-Fi, calibrazione web, storico microSD, OTA e integrazione backend |
-| [`docs/hardware.md`](docs/hardware.md) | Documentato | Componenti e collegamenti di riferimento |
-| [`docs/wiring.md`](docs/wiring.md) | Documentato | Schema testuale e avvertenze sui colori dei cavetti |
-| [`docs/production-architecture.md`](docs/production-architecture.md) | Implementato lato dispositivo | Flusso ESP32, contratto backend e regole kiosk |
-| [`docs/test-results.md`](docs/test-results.md) | Aggiornato | Risultati osservati e limiti ancora aperti |
-| [`stl`](stl/) | In sviluppo | Case e supporti stampabili in 3D, separati per autore e licenza |
+| Area | Funzioni disponibili |
+| --- | --- |
+| **Acquisizione** | Quattro AS5600 isolati tramite PCA9546/TCA9546A, calibrazione di dieci posizioni per manopola, tolleranza, isteresi e stabilità |
+| **Portale web** | Dashboard responsive, display remoto, calibrazione, storico filtrabile e ordinabile, sistema, assistenza CaskLogic e tema chiaro/scuro |
+| **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD |
+| **Autodiagnosi** | Test di sensori, microSD, batteria, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore per sensore |
+| **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
+| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `Laveggio-PW-casklogic` |
+| **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
+| **Aggiornamenti** | OTA firmato ECDSA-P256, doppia partizione, validazione al riavvio, rollback e registro degli esiti |
 
-## Hardware utilizzato
+Il firmware non usa una coda persistente per gli eventi verso il gestionale e
+non trasforma la microSD in un NAS.
 
-- [Waveshare ESP32-C6-LCD-1.47 — acquisto Amazon](https://www.amazon.it/dp/B0DHTMYTCY)
-- [Adafruit PCA9546 / TCA9546A, multiplexer I2C STEMMA QT a 4 canali — acquisto Amazon](https://www.amazon.it/dp/B0BSG8KX8L)
-- [Kit di 4 moduli AS5600 a 12 bit con magneti — acquisto Amazon](https://www.amazon.it/dp/B0FH1Y3GLG)
-- [5 coppie di cavetti micro JST-SH 1.0 mm, 4 pin — acquisto Amazon](https://www.amazon.it/dp/B0BNCHC5Q4)
-- [Documentazione Waveshare ESP32-C6-LCD-1.47](https://docs.waveshare.com/ESP32-C6-LCD-1.47?variant=ESP32-C6-LCD-1.47)
-- [Pinout Adafruit PCA9546 / TCA9546A](https://learn.adafruit.com/adafruit-pca9546-4-channel-stemma-qt-multiplexer/pinouts)
-- [Manuale del modulo AS5600 utilizzato come riferimento](https://manuals.plus/asin/B0FH2G8PLS)
-- [Datasheet ufficiale ams OSRAM AS5600](https://look.ams-osram.com/m/7059eac7531a86fd/original/AS5600-DS000365.pdf)
-- Alimentazione USB-C
+## 📊 Autodiagnosi
 
-Il multiplexer del prototipo risponde a `0x70`; ogni AS5600 risponde a `0x36`
-all'interno del proprio canale isolato.
+<table>
+  <tr>
+    <td width="74%" valign="top">
+      <img src="docs/assets/laveggio-autodiagnosi.png" alt="Autodiagnosi desktop">
+    </td>
+    <td width="26%" valign="top" align="center">
+      <img src="docs/assets/laveggio-autodiagnosi-mobile.png" width="260" alt="Autodiagnosi mobile">
+    </td>
+  </tr>
+</table>
 
-## Avvio rapido del firmware diagnostico
+La corrente assorbita è indicata come non disponibile perché il bq25185 non
+fornisce telemetria amperometrica. Tensione batteria, temperatura del chip,
+RSSI e memoria libera sono invece registrabili senza aggiungere altre schede.
 
-1. Installare [Arduino IDE](https://www.arduino.cc/en/software) e il core
-   `esp32` di Espressif.
-2. Aprire
-   `firmware/calibration-reader/calibration-reader.ino`.
-3. Selezionare la scheda ESP32-C6 con flash da 8 MB e `USB CDC On Boot`.
-4. Verificare il cablaggio descritto in [`docs/wiring.md`](docs/wiring.md).
-5. Compilare e caricare lo sketch.
-6. Aprire il monitor seriale a `115200 baud`.
+## 🧩 Architettura
 
-Lo schermo mostra `S0`–`S3`, il valore grezzo `0–4095` e lo stato del magnete.
-La seriale emette ogni secondo un riepilogo JSON con frequenza di scansione,
-durata, stato del bus, angolo, AGC e magnitudine.
+```mermaid
+flowchart LR
+    A[4 manopole] --> B[4 sensori AS5600]
+    B --> C[PCA9546 / TCA9546A]
+    C --> D[ESP32-C6]
+    D --> E[Display locale]
+    D --> F[MicroSD 128 GB]
+    D --> G[Portale web CaskLogic]
+    D -->|HTTPS / mTLS| H[Gestionale]
+    D -->|MQTT TLS opzionale| H
+    I[LiPo 1S] --> J[bq25185 + boost 5 V]
+    J --> D
+```
 
-## Stato attuale
+## 🔩 Hardware
 
-- ESP32-C6, display e multiplexer rilevati e funzionanti.
-- Bus verificato con `SDA=GPIO1`, `SCL=GPIO2`, multiplexer `0x70` e AS5600
-  `0x36`.
-- Lettura del registro `RAW ANGLE` (`0x0C`–`0x0D`) implementata.
-- Aggiornamento parziale delle sole righe modificate, senza ridisegnare
-  continuamente l'intero display.
-- Durante le ultime prove è stato rilevato un campo magnetico debole e una
-  variazione angolare limitata. La validazione meccanica con magnete centrato e
-  diametrale resta da completare.
-- Gateway Wi-Fi, calibrazione persistente, storico microSD, interfaccia web,
-  aggiornamento OTA, sicurezza del portale e pubblicazione HTTPS/mTLS verso il
-  backend sono implementati. Il perimetro e documentato in
-  [`docs/security.md`](docs/security.md).
-- L'integrazione nel gestionale non appartiene a questo repository: il relativo
-  contratto è in
-  [`docs/casklogic-integration-contract.md`](docs/casklogic-integration-contract.md).
-- Il gateway operativo è stato compilato e testato virtualmente, ma resta da
-  collaudare sul dispositivo e sulla meccanica reale prima dell'uso operativo.
+| Componente | Quantità | Riferimento |
+| --- | ---: | --- |
+| Waveshare ESP32-C6-LCD-1.47 | 1 | [Amazon.it · B0DHTMYTCY](https://www.amazon.it/dp/B0DHTMYTCY) |
+| Adafruit PCA9546 / TCA9546A STEMMA QT | 1 | [Amazon.it · B0BSG8KX8L](https://www.amazon.it/dp/B0BSG8KX8L) |
+| Kit moduli AS5600 a 12 bit con magneti | 1 kit | [Amazon.it · B0FH1Y3GLG](https://www.amazon.it/dp/B0FH1Y3GLG) |
+| Cavetti micro JST-SH 1,0 mm, 4 pin | 1 confezione | [Amazon.it · B0BNCHC5Q4](https://www.amazon.it/dp/B0BNCHC5Q4) |
+| **Adafruit bq25185 USB/DC/Solar Charger con boost 5 V, PID 6106** | **1** | **[Amazon.it · B0DXK6YZX8](https://www.amazon.it/dp/B0DXK6YZX8)** |
+| Batteria LiPo AFTERTECH 103040, 1200 mAh | 1 | Polarità JST-PH da verificare prima del collegamento |
+| MicroSD FAT32 | 1 | 128 GB installata |
 
-## Parti stampabili in 3D
+Il modulo bq25185 acquistato è la versione con boost TPS61023 a 5 V: non serve
+un convertitore step-up separato. Collegamenti e verifiche elettriche sono
+descritti in [`docs/power-and-ups.md`](docs/power-and-ups.md).
 
-La cartella [`stl/`](stl/) distingue due provenienze:
+## 🚀 Avvio rapido
 
-- `third-party`: modelli scaricati da terzi, conservati con attribuzione, fonte
-  e licenza originali;
-- `original-designs`: futuri case e supporti progettati specificamente per
-  Laveggio Printomatic da Piero Borgatta. I collegamenti MakerWorld saranno
-  aggiunti quando i modelli verranno pubblicati.
+### Simulatore web
 
-Il case attualmente presente per il multiplexer Adafruit deriva dal modello
-[Enclosure for Adafruit 4ch QT Mux 5664 PCA9546](https://www.printables.com/model/658753-enclosure-for-adafruit-4ch-qt-mux-5664-pca9546/files)
-di OpenSensor.io ed è distribuito dall'autore con licenza CC BY-NC-SA 4.0.
+```powershell
+cd firmware/production-gateway
+npm test
+npm run simulate
+```
 
-## Licenza
+Il portale risponde su `http://127.0.0.1:4177`. Il simulatore usa gli stessi
+file HTML, CSS e JavaScript incorporati nel firmware.
 
-Salvo indicazione diversa nei singoli file, il progetto è distribuito con
-licenza [Creative Commons Attribution 4.0 International](LICENSE). È richiesta
-l'attribuzione a Piero Borgatta e ai contributori del progetto.
+### Build ESP32-C6
 
-Gli STL di terzi non sono coperti dalla licenza generale del repository: fanno
-fede il relativo README, il file di licenza nella loro cartella e
+```powershell
+cd firmware/production-gateway
+$env:PLATFORMIO_CORE_DIR = 'C:\pio'
+py -m platformio run
+```
+
+| Risorsa | Utilizzo verificato |
+| --- | ---: |
+| RAM statica | `50.708 / 327.680 byte` · `15,5%` |
+| Flash applicazione | `1.686.942 / 2.031.616 byte` · `83,0%` |
+| Immagine OTA firmata | `1.744.992 byte` |
+| Margine per slot OTA | `286.624 byte` · `14,1%` |
+
+Artefatti principali:
+
+- `firmware.signed.bin`: aggiornamento accettato dal portale OTA;
+- `firmware.factory.bin`: prima installazione completa, inclusa la tabella
+  partizioni;
+- `firmware.bin`: input non firmato, non caricabile dal portale.
+
+## 🛡️ Sicurezza
+
+<p>
+  <img alt="ECDSA signed OTA" src="https://img.shields.io/badge/OTA-ECDSA--P256_signed-16875b?style=flat-square&logo=letsencrypt&logoColor=white">
+  <img alt="TLS" src="https://img.shields.io/badge/backend-TLS_%2F_mTLS-28678e?style=flat-square&logo=openssl&logoColor=white">
+  <img alt="HMAC SHA256" src="https://img.shields.io/badge/events-HMAC--SHA256-5b677a?style=flat-square&logo=databricks&logoColor=white">
+  <img alt="HTTP Digest" src="https://img.shields.io/badge/portal-HTTP_Digest-c98b2e?style=flat-square&logo=auth0&logoColor=white">
+</p>
+
+- autenticazione HTTP Digest, rate limit, CSRF e header browser restrittivi;
+- endpoint remoti esclusivamente TLS con CA obbligatoria e mTLS opzionale;
+- segreto HMAC distinto per la firma delle pesate;
+- token dedicato per `GET /api/metrics`;
+- configurazione remota limitata a una whitelist di campi operativi;
+- chiave privata OTA esterna al repository;
+- pacchetto assistenza senza credenziali, SSID o indirizzi IP.
+
+Il portale locale usa HTTP e deve restare su una VLAN tecnica, senza port
+forwarding verso Internet. Secure Boot e Flash Encryption tramite eFuse
+richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
+[`docs/security.md`](docs/security.md) e
+[`docs/firmware-signing.md`](docs/firmware-signing.md).
+
+## 🗂️ Struttura
+
+| Percorso | Contenuto |
+| --- | --- |
+| [`firmware/production-gateway`](firmware/production-gateway/) | Gateway operativo ESP32-C6 e simulatore web |
+| [`firmware/calibration-reader`](firmware/calibration-reader/) | Firmware diagnostico usato nelle prime prove hardware |
+| [`docs`](docs/) | Cablaggio, alimentazione, sicurezza, test e contratto gestionale |
+| [`stl`](stl/) | Case e supporti stampabili in 3D con licenze separate |
+
+## 📚 Documentazione
+
+- [Hardware e distinta materiali](docs/hardware.md)
+- [Cablaggio dei sensori](docs/wiring.md)
+- [Batteria, caricatore e boost 5 V](docs/power-and-ups.md)
+- [Architettura operativa](docs/production-architecture.md)
+- [Sicurezza del gateway](docs/security.md)
+- [Firma e rilascio firmware](docs/firmware-signing.md)
+- [Contratto futuro con CaskLogic](docs/casklogic-integration-contract.md)
+- [Prompt per implementare il lato gestionale](docs/casklogic-integration-prompt.md)
+- [Risultati delle verifiche](docs/test-results.md)
+
+## Stato del progetto
+
+- [x] Lettura AS5600 e multiplexer verificata sul prototipo
+- [x] Gateway, portale web e simulatore implementati
+- [x] Test host `20/20` e build ESP32-C6 completati
+- [x] OTA firmato e doppia partizione con margine del `14,1%`
+- [ ] Calibrazione meccanica completa delle quattro manopole
+- [ ] Collaudo reale di microSD, batteria, Wi-Fi, display e rollback
+- [ ] Implementazione del contratto nel gestionale CaskLogic
+
+## Licenza e attribuzioni
+
+Il codice e la documentazione sono distribuiti con licenza
+[Creative Commons Attribution 4.0 International](LICENSE), salvo indicazioni
+diverse nei singoli file. È richiesta l'attribuzione a **Piero Borgatta** e ai
+contributori del progetto.
+
+Gli STL di terzi mantengono licenza e attribuzione originali, documentate in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+<p align="center">
+  <strong>CaskLogic Solutions</strong><br>
+  Laveggio Printomatic · preservare la meccanica, rendere misurabile il dato
+</p>

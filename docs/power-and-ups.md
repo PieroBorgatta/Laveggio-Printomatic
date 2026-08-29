@@ -7,6 +7,8 @@ Board, Product ID 6106. Integra il caricatore, il power-path e un TPS61023 con
 uscita regolata a 5 V fino a 1 A; non richiede un convertitore separato. Va
 installato nel contenitore insieme a una LiPo 1S protetta.
 
+Modulo acquistato: [Amazon.it — ASIN B0DXK6YZX8](https://www.amazon.it/dp/B0DXK6YZX8).
+
 Il collegamento di potenza previsto e:
 
 ```text
