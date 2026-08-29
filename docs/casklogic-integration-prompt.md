@@ -18,6 +18,14 @@ il canale realtime esistente; device.power deve alimentare audit e notifiche
 configurabili lato backend. Non usare la microSD del dispositivo come fonte
 canonica e non implementare accesso NAS.
 
+Esponi l'endpoint esclusivamente in HTTPS. Prevedi mTLS opzionale al reverse
+proxy/backend, con associazione del certificato client al device_id e
+rotazione/revoca amministrabile. L'heartbeat deve ricevere rapidamente una
+risposta 2xx, aggiornare ultimo contatto e audit del dispositivo e non deve
+attivare elaborazioni che possano far scattare impropriamente il watchdog del
+gateway. Aggiungi test per CA/certificato client non valido, token revocato,
+duplicati, heartbeat e timeout.
+
 Nel kiosk mantieni sempre disponibile l'inserimento manuale. Un aggiornamento
 automatico non deve sovrascrivere un campo mentre l'operatore lo sta editando e
 non deve mai salvare automaticamente lordo, tara o una pesata. Per una nuova

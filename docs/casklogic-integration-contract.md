@@ -13,6 +13,11 @@ Authorization: Bearer <token univoco del dispositivo>
 Content-Type: application/json
 ```
 
+Il trasporto deve usare TLS con un certificato server verificabile dalla CA
+installata sul dispositivo. Quando viene configurato mTLS, il reverse proxy o
+il backend deve inoltre verificare il certificato client e associarlo allo
+stesso `device_id` autorizzato dal token applicativo.
+
 Eventi inviati:
 
 - `scale.snapshot`: misura valida e stabile cambiata;
@@ -50,6 +55,9 @@ Campi di identita e ordinamento obbligatori:
 - non creare automaticamente lordo, tara o una pesata definitiva;
 - non sovrascrivere un campo mentre l'operatore sta inserendo un valore manuale;
 - conservare audit di connessioni, errori e cambi di alimentazione;
+- registrare ultimo heartbeat ricevuto, codice di risposta e stato online;
+- rispondere rapidamente all'heartbeat prima di avviare elaborazioni non
+  necessarie alla conferma, per non causare riavvii impropri del dispositivo;
 - demandare al backend l'invio e-mail per gli eventi configurati.
 
 ## Risposta
@@ -72,3 +80,8 @@ archivi precedenti, e l'interfaccia permette un export NDJSON concatenato. La
 microSD non e la fonte canonica delle pesate confermate nel gestionale e il
 campo locale `delivery` registra l'intenzione di invio, non una ricevuta del
 backend.
+
+Il watchdog heartbeat del dispositivo considera raggiungibile il gestionale
+soltanto dopo una risposta `2xx`. Dopo la soglia configurata esegue al massimo
+un riavvio e resta inibito fino a una nuova risposta valida, evitando reboot
+loop durante indisponibilita prolungate del backend.

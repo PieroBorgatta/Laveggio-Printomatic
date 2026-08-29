@@ -97,7 +97,8 @@ calibrazione reale.
 
 Il dispositivo usa richieste `HTTPS POST` asincrone rispetto alla scansione dei
 sensori. Il certificato CA deve essere configurato dall'interfaccia web; il
-firmware rifiuta HTTPS privo di una CA attendibile. Il backend deve includere:
+firmware rifiuta endpoint HTTP e HTTPS privo di una CA attendibile. Certificato
+e chiave client opzionali consentono mTLS. Il backend deve includere:
 
 - TLS con CA configurata sul dispositivo;
 - autenticazione per dispositivo;
@@ -107,12 +108,19 @@ firmware rifiuta HTTPS privo di una CA attendibile. Il backend deve includere:
 - snapshot completo a ogni evento, non la sola cifra modificata;
 - nessuna persistenza automatica del lordo/tara senza conferma dell'operatore.
 
+Il portale locale resta HTTP ed e destinato a una VLAN tecnica amministrata
+dall'access point, con ACL che ne limitino l'accesso. Autenticazione Digest,
+rate limit, CSRF e header restrittivi riducono il rischio applicativo ma non
+sostituiscono la cifratura del trasporto. Dettagli in
+[`security.md`](security.md).
+
 ## Affidabilità
 
 - watchdog hardware alimentato soltanto da task realmente sani;
 - riconnessione Wi-Fi e backend indipendenti dalla scansione locale;
 - configurazione Wi-Fi e backend non inclusa in chiaro nel repository;
-- eventuale riavvio notturno configurabile fuori dalle ore operative;
+- watchdog heartbeat opzionale con un solo riavvio e inibizione persistente
+  fino alla successiva risposta valida;
 - stato locale evidente: sensori, Wi-Fi, backend e misura valida;
 - calibrazione salvata con versione e checksum;
 - fallback manuale completo quando sensori o rete non sono disponibili.

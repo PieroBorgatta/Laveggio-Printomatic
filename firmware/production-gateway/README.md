@@ -10,12 +10,17 @@ eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 - calibrazione persistente delle dieci posizioni di ogni manopola;
 - distanza angolare circolare, tolleranza, isteresi e finestra di stabilita;
 - display locale spento per impostazione predefinita e controllabile dal web;
-- storico append-only e log diagnostici su microSD FAT32;
+- storico e log NDJSON settimanali in cartelle anno/mese su microSD FAT32;
 - campione diagnostico dei quattro sensori registrato ogni minuto;
 - Wi-Fi DHCP o statico, scansione reti e access point di recupero;
-- autenticazione HTTP Basic dopo il provisioning iniziale;
+- autenticazione HTTP Digest, rate limit, CSRF e header browser restrittivi;
 - invio asincrono di snapshot completi e heartbeat al futuro backend CaskLogic;
-- certificato CA configurabile e obbligatorio per endpoint HTTPS;
+- CA obbligatoria, soli endpoint HTTPS e certificato client mTLS opzionale;
+- heartbeat con watchdog opzionale e protezione persistente dai reboot loop;
+- storico filtrabile e ordinabile, con sole 20 righe al primo caricamento ed
+  export coerente con i filtri;
+- rotazione dimensionale e retention delle pesate configurabili;
+- tensione e stima percentuale della batteria opzionali su GPIO0;
 - rilevazione opzionale della perdita di alimentazione esterna;
 - aggiornamento firmware OTA con doppia partizione;
 - simulatore locale che usa gli stessi file HTML, CSS e JavaScript incorporati.
@@ -38,10 +43,10 @@ Artefatti principali:
 - `.pio/build/waveshare_esp32c6_lcd_147/firmware.bin`: aggiornamento OTA;
 - `.pio/build/waveshare_esp32c6_lcd_147/firmware.factory.bin`: prima installazione completa.
 
-Misure della build `1.0.1` verificata il 29 agosto 2026:
+Misure della build `1.1.0` verificata il 29 agosto 2026:
 
-- RAM statica: `49.508 / 327.680 byte` (`15,1%`);
-- flash applicazione: `1.548.522 / 1.900.544 byte` (`81,5%`).
+- RAM statica: `49.916 / 327.680 byte` (`15,2%`);
+- flash applicazione: `1.592.462 / 1.900.544 byte` (`83,8%`).
 
 La RAM allocata dinamicamente per coda HTTPS, task e richieste web non e
 compresa nel primo valore; prima dell'installazione operativa va quindi
@@ -73,30 +78,34 @@ Lo stesso access point viene attivato se la rete configurata non e raggiungibile
 Il dispositivo continua a tentare la riconnessione e spegne automaticamente
 l'access point dopo 120 secondi consecutivi di connessione stabile alla rete
 principale. Durante il primo provisioning l'interfaccia e raggiungibile dalla
-rete creata dal dispositivo. Dopo il salvataggio del Wi-Fi, le pagine richiedono
-l'utente `admin` e la password amministrativa generata mostrata sulla seriale;
-la password va cambiata dalla sezione Sistema.
+rete creata dal dispositivo e richiede gia l'utente `info@casklogic.com` e la
+password iniziale `Presario41740+`. Le stesse credenziali proteggono il portale
+dopo il salvataggio del Wi-Fi. La password non viene stampata sulla seriale e
+va cambiata dalla sezione Sistema prima dell'uso operativo.
 
 ## File sulla microSD
 
 La scheda deve essere FAT32. Il firmware crea:
 
 ```text
-/weights/history.ndjson
-/weights/history-YYYYMMDD-HHMMSS-<uptime>.ndjson
-/logs/system.ndjson
-/logs/system-YYYYMMDD-HHMMSS-<uptime>.ndjson
+/weights/YYYY/MM/history-YYYY-Www.ndjson
+/logs/YYYY/MM/system-YYYY-Www.ndjson
+/weights/unsynced/history-<boot-id>.ndjson
+/logs/unsynced/system-<boot-id>.ndjson
 ```
 
 Lo storico viene scritto soltanto quando tutte le cifre sono valide, la misura
 rimane stabile per la finestra configurata e il peso stabile cambia. I file
 vengono ruotati con nomi univoci e gli archivi non vengono sovrascritti. La
-pagina Storico legge i record piu recenti anche oltre le rotazioni; il comando
-di export concatena in ordine tutti gli archivi NDJSON presenti sulla scheda.
+pagina Storico legge soltanto le 20 righe piu recenti all'apertura e applica
+filtri e ordinamento lato dispositivo; l'export usa gli stessi filtri attivi.
 L'esito di pubblicazione piu recente e visibile nello stato integrazione, mentre
 il record locale rimane immutabile e non costituisce conferma di ricezione.
 La pagina Sistema offre separatamente l'export completo dei log, inclusi i
 campioni periodici di presenza, angolo, stato magnete, AGC e magnitudine.
+
+Le regole di esposizione in rete, il limite dell'HTTP locale e la cifratura
+verso CaskLogic sono descritte in [`../../docs/security.md`](../../docs/security.md).
 
 ## Limiti della verifica corrente
 

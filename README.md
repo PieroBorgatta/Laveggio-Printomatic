@@ -68,7 +68,9 @@ durata, stato del bus, angolo, AGC e magnitudine.
   variazione angolare limitata. La validazione meccanica con magnete centrato e
   diametrale resta da completare.
 - Gateway Wi-Fi, calibrazione persistente, storico microSD, interfaccia web,
-  aggiornamento OTA e pubblicazione HTTPS verso il backend sono implementati.
+  aggiornamento OTA, sicurezza del portale e pubblicazione HTTPS/mTLS verso il
+  backend sono implementati. Il perimetro e documentato in
+  [`docs/security.md`](docs/security.md).
 - L'integrazione nel gestionale non appartiene a questo repository: il relativo
   contratto è in
   [`docs/casklogic-integration-contract.md`](docs/casklogic-integration-contract.md).

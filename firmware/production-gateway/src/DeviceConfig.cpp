@@ -27,16 +27,31 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.backendUrl = preferences_.getString("backend_url", "");
   config_.backendToken = preferences_.getString("backend_tok", "");
   config_.tlsCaCertificate = preferences_.getString("tls_ca", "");
+  config_.tlsClientCertificate = preferences_.getString("tls_cli_crt", "");
+  config_.tlsClientPrivateKey = preferences_.getString("tls_cli_key", "");
   config_.notificationUrl = preferences_.getString("notify_url", "");
   config_.ntpServer = preferences_.getString("ntp", "pool.ntp.org");
   config_.timezone = preferences_.getString("timezone", "CET-1CEST,M3.5.0,M10.5.0/3");
-  config_.adminUser = preferences_.getString("admin_user", "admin");
-  config_.adminPassword = preferences_.getString("admin_pass", "Cask-" + deviceSuffix + "!");
+  config_.adminUser = preferences_.getString("admin_user", "info@casklogic.com");
+  config_.adminPassword = preferences_.getString("admin_pass", "Presario41740+");
   config_.displayDefaultOn = preferences_.getBool("display_on", false);
   config_.powerSenseEnabled = preferences_.getBool("pwr_sense", false);
   config_.powerSenseActiveHigh = preferences_.getBool("pwr_high", true);
   config_.stableWindowMs = preferences_.getUInt("stable_ms", 600);
   config_.heartbeatSeconds = preferences_.getUInt("heartbeat_s", 30);
+  config_.heartbeatWatchdogEnabled = preferences_.getBool("hb_watchdog", false);
+  config_.heartbeatFailureThreshold = preferences_.getUChar("hb_fail_max", 5);
+  config_.heartbeatRestartSuppressed = preferences_.getBool("hb_suppress", false);
+  config_.historyEnabled = preferences_.getBool("hist_enabled", true);
+  config_.historyKeepForever = preferences_.getBool("hist_forever", true);
+  config_.historyRetentionDays = preferences_.getUShort("hist_days", 730);
+  config_.historyFileMaxMb = preferences_.getUShort("hist_max_mb", 32);
+  config_.systemLogFileMaxMb = preferences_.getUShort("log_max_mb", 8);
+  config_.batterySenseEnabled = preferences_.getBool("bat_sense", false);
+  config_.batteryDividerMilli = preferences_.getUShort("bat_div", 2000);
+  config_.batteryMinMv = preferences_.getUShort("bat_min_mv", 3200);
+  config_.batteryMaxMv = preferences_.getUShort("bat_max_mv", 4200);
+  config_.batteryCapacityMah = preferences_.getUShort("bat_cap_mah", 1200);
 
   const uint32_t defaultMultipliers[laveggio::kChannelCount] = {10000, 1000, 100, 10};
   for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
@@ -83,6 +98,8 @@ bool ConfigStore::saveSettings() {
   preferences_.putString("backend_url", config_.backendUrl);
   preferences_.putString("backend_tok", config_.backendToken);
   preferences_.putString("tls_ca", config_.tlsCaCertificate);
+  preferences_.putString("tls_cli_crt", config_.tlsClientCertificate);
+  preferences_.putString("tls_cli_key", config_.tlsClientPrivateKey);
   preferences_.putString("notify_url", config_.notificationUrl);
   preferences_.putString("ntp", config_.ntpServer);
   preferences_.putString("timezone", config_.timezone);
@@ -93,7 +110,25 @@ bool ConfigStore::saveSettings() {
   preferences_.putBool("pwr_high", config_.powerSenseActiveHigh);
   preferences_.putUInt("stable_ms", config_.stableWindowMs);
   preferences_.putUInt("heartbeat_s", config_.heartbeatSeconds);
+  preferences_.putBool("hb_watchdog", config_.heartbeatWatchdogEnabled);
+  preferences_.putUChar("hb_fail_max", config_.heartbeatFailureThreshold);
+  preferences_.putBool("hb_suppress", config_.heartbeatRestartSuppressed);
+  preferences_.putBool("hist_enabled", config_.historyEnabled);
+  preferences_.putBool("hist_forever", config_.historyKeepForever);
+  preferences_.putUShort("hist_days", config_.historyRetentionDays);
+  preferences_.putUShort("hist_max_mb", config_.historyFileMaxMb);
+  preferences_.putUShort("log_max_mb", config_.systemLogFileMaxMb);
+  preferences_.putBool("bat_sense", config_.batterySenseEnabled);
+  preferences_.putUShort("bat_div", config_.batteryDividerMilli);
+  preferences_.putUShort("bat_min_mv", config_.batteryMinMv);
+  preferences_.putUShort("bat_max_mv", config_.batteryMaxMv);
+  preferences_.putUShort("bat_cap_mah", config_.batteryCapacityMah);
   return ok;
+}
+
+bool ConfigStore::saveHeartbeatRestartSuppressed() {
+  preferences_.putBool("hb_suppress", config_.heartbeatRestartSuppressed);
+  return true;
 }
 
 bool ConfigStore::saveCalibration(uint8_t channel) {

@@ -25,20 +25,22 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.0.1";
+constexpr char kFirmwareVersion[] = "1.1.0";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdCs = 4;
 constexpr uint8_t kI2cSda = 1;
 constexpr uint8_t kI2cScl = 2;
 constexpr uint8_t kMuxReset = 3;
 constexpr uint8_t kPowerSensePin = 20;
+constexpr uint8_t kBatterySensePin = 0;
 constexpr uint32_t kSensorIntervalMs = 20;
 constexpr uint32_t kHealthIntervalMs = 250;
 constexpr uint32_t kReconnectIntervalMs = 15000;
 constexpr uint32_t kRescueApShutdownDelayMs = 120000;
 constexpr uint32_t kDiagnosticLogIntervalMs = 60000;
-constexpr uint32_t kSystemLogLimit = 4UL * 1024UL * 1024UL;
-constexpr uint32_t kHistoryLogLimit = 12UL * 1024UL * 1024UL;
+constexpr uint32_t kRetentionIntervalMs = 86400000UL;
+constexpr uint32_t kAuthBlockMs = 60000;
+constexpr uint8_t kAuthFailureLimit = 5;
 constexpr char kRescueSsid[] = "Laveggio-PW-casklogic";
 constexpr char kRescuePassword[] = "casklogic";
 
@@ -46,7 +48,10 @@ struct OutboundMessage {
   char url[256];
   char token[160];
   char caCertificate[3072];
+  char clientCertificate[3072];
+  char clientPrivateKey[3072];
   char body[1152];
+  bool heartbeat;
 };
 
 ConfigStore configStore;
@@ -69,7 +74,14 @@ bool otaSucceeded = false;
 bool externalPowerPresent = true;
 bool previousExternalPowerPresent = true;
 volatile int integrationLastCode = 0;
+volatile bool heartbeatResultPending = false;
+volatile bool heartbeatResultOk = false;
+volatile int heartbeatResultCode = 0;
+portMUX_TYPE heartbeatResultMux = portMUX_INITIALIZER_UNLOCKED;
 uint32_t sequenceNumber = 0;
+uint16_t batteryVoltageMv = 0;
+uint8_t heartbeatConsecutiveFailures = 0;
+uint8_t authFailures = 0;
 uint32_t scanCounter = 0;
 uint32_t scansPerSecond = 0;
 uint32_t lastSensorReadMs = 0;
@@ -78,8 +90,12 @@ uint32_t lastScanCounterMs = 0;
 uint32_t lastReconnectMs = 0;
 uint32_t lastHeartbeatMs = 0;
 uint32_t lastDiagnosticLogMs = 0;
+uint32_t lastRetentionMs = 0;
 uint32_t stationConnectedSinceMs = 0;
 uint32_t scheduledRestartMs = 0;
+uint32_t authBlockedUntilMs = 0;
+String csrfToken;
+String lastHeartbeatAckAt;
 
 String jsonEscape(const String &value) {
   String escaped;
@@ -118,6 +134,28 @@ String timestampIso() {
   return buffer;
 }
 
+String timestampIso(time_t epoch) {
+  if (epoch < 1700000000) return "";
+  struct tm timeInfo;
+  localtime_r(&epoch, &timeInfo);
+  char buffer[32];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S%z", &timeInfo);
+  return buffer;
+}
+
+uint8_t estimatedBatteryPercent() {
+  const DeviceConfig &config = configStore.get();
+  if (!config.batterySenseEnabled || batteryVoltageMv == 0 || config.batteryMaxMv <= config.batteryMinMv) return 0;
+  const long percent = map(
+    constrain(batteryVoltageMv, config.batteryMinMv, config.batteryMaxMv),
+    config.batteryMinMv,
+    config.batteryMaxMv,
+    0,
+    100
+  );
+  return static_cast<uint8_t>(constrain(percent, 0L, 100L));
+}
+
 String resetReasonLabel() {
   switch (esp_reset_reason()) {
     case ESP_RST_POWERON: return "accensione";
@@ -137,8 +175,40 @@ void ensureSdDirectories() {
   if (!SD.exists("/weights")) SD.mkdir("/weights");
 }
 
-String archivePath(const char *path) {
-  const String source(path);
+bool ensureDirectoryTree(const String &path) {
+  if (!sdReady || path.isEmpty()) return false;
+  String current;
+  int start = path.startsWith("/") ? 1 : 0;
+  while (start < static_cast<int>(path.length())) {
+    const int separator = path.indexOf('/', start);
+    const int end = separator < 0 ? path.length() : separator;
+    if (end > start) {
+      current += "/" + path.substring(start, end);
+      if (!SD.exists(current) && !SD.mkdir(current)) return false;
+    }
+    if (separator < 0) break;
+    start = separator + 1;
+  }
+  return true;
+}
+
+String weeklyLogPath(const char *root, const char *prefix) {
+  struct tm timeInfo;
+  if (!getLocalTime(&timeInfo, 10)) {
+    const String directory = String(root) + "/unsynced";
+    ensureDirectoryTree(directory);
+    return directory + "/" + prefix + "-" + bootId + ".ndjson";
+  }
+  char directory[24];
+  char week[24];
+  strftime(directory, sizeof(directory), "%Y/%m", &timeInfo);
+  strftime(week, sizeof(week), "%G-W%V", &timeInfo);
+  const String fullDirectory = String(root) + "/" + directory;
+  ensureDirectoryTree(fullDirectory);
+  return fullDirectory + "/" + prefix + "-" + week + ".ndjson";
+}
+
+String archivePath(const String &source) {
   const int separator = source.lastIndexOf('/');
   const int extension = source.lastIndexOf(".ndjson");
   const String directory = source.substring(0, separator);
@@ -153,7 +223,7 @@ String archivePath(const char *path) {
   return directory + "/" + stem + "-" + stamp + "-" + String(millis()) + ".ndjson";
 }
 
-void rotateLogIfNeeded(const char *path, uint32_t maxBytes) {
+void rotateLogIfNeeded(const String &path, uint32_t maxBytes) {
   if (!sdReady || !SD.exists(path)) return;
   File file = SD.open(path, FILE_READ);
   if (!file) return;
@@ -163,29 +233,48 @@ void rotateLogIfNeeded(const char *path, uint32_t maxBytes) {
   SD.rename(path, archivePath(path));
 }
 
-std::vector<String> listNdjsonFiles(const char *directory, const char *prefix) {
-  std::vector<String> paths;
-  if (!sdReady) return paths;
+void collectNdjsonFiles(const String &directory, const char *prefix, std::vector<String> &paths) {
   File folder = SD.open(directory);
-  if (!folder || !folder.isDirectory()) return paths;
+  if (!folder || !folder.isDirectory()) return;
   File entry = folder.openNextFile();
   while (entry) {
-    if (!entry.isDirectory()) {
-      String name = entry.name();
-      if (name.startsWith("/")) name = name.substring(name.lastIndexOf('/') + 1);
+    String entryPath = entry.path();
+    if (!entryPath.startsWith("/")) entryPath = directory + "/" + entryPath;
+    const bool directoryEntry = entry.isDirectory();
+    entry.close();
+    if (directoryEntry) {
+      collectNdjsonFiles(entryPath, prefix, paths);
+    } else {
+      const String name = entryPath.substring(entryPath.lastIndexOf('/') + 1);
       if (name.startsWith(prefix) && name.endsWith(".ndjson")) {
-        paths.push_back(String(directory) + "/" + name);
+        paths.push_back(entryPath);
       }
     }
-    entry.close();
     entry = folder.openNextFile();
   }
   folder.close();
-  std::sort(paths.begin(), paths.end());
+}
+
+std::vector<String> listNdjsonFiles(const char *directory, const char *prefix) {
+  std::vector<String> paths;
+  if (!sdReady) return paths;
+  collectNdjsonFiles(directory, prefix, paths);
+  const String root = directory;
+  std::sort(paths.begin(), paths.end(), [&root](const String &left, const String &right) {
+    String leftKey = left;
+    String rightKey = right;
+    const String leftRelative = left.substring(root.length() + 1);
+    const String rightRelative = right.substring(root.length() + 1);
+    if (leftRelative.indexOf('/') < 0) leftKey = root + "/0000/00/" + leftRelative;
+    if (rightRelative.indexOf('/') < 0) rightKey = root + "/0000/00/" + rightRelative;
+    leftKey.replace("/unsynced/", "/0000/00/");
+    rightKey.replace("/unsynced/", "/0000/00/");
+    return leftKey < rightKey;
+  });
   return paths;
 }
 
-void appendLine(const char *path, const String &line, uint32_t maxBytes) {
+void appendLine(const String &path, const String &line, uint32_t maxBytes) {
   if (!sdReady) return;
   digitalWrite(14, HIGH);
   rotateLogIfNeeded(path, maxBytes);
@@ -206,7 +295,11 @@ void logSystem(const String &level, const String &event, const String &detail = 
   line += ",\"event\":" + quoted(event);
   if (!detail.isEmpty()) line += ",\"detail\":" + quoted(detail);
   line += "}";
-  appendLine("/logs/system.ndjson", line, kSystemLogLimit);
+  appendLine(
+    weeklyLogPath("/logs", "system"),
+    line,
+    configStore.get().systemLogFileMaxMb * 1024UL * 1024UL
+  );
   Serial.println(line);
 }
 
@@ -218,6 +311,8 @@ void recordSensorDiagnostics() {
   line += ",\"boot_id\":" + quoted(bootId);
   line += ",\"event\":\"sensor_diagnostics\"";
   line += ",\"scan_rate_hz\":" + String(scansPerSecond);
+  line += ",\"external_power\":" + boolJson(externalPowerPresent);
+  line += ",\"battery_voltage_mv\":" + String(batteryVoltageMv);
   line += ",\"weight_kg\":" + String(currentSnapshot.weightKg);
   line += ",\"valid\":" + boolJson(currentSnapshot.valid);
   line += ",\"stable\":" + boolJson(currentSnapshot.stable);
@@ -233,10 +328,14 @@ void recordSensorDiagnostics() {
     line += ",\"magnitude\":" + String(reading.magnitude) + "}";
   }
   line += "]}";
-  appendLine("/logs/system.ndjson", line, kSystemLogLimit);
+  appendLine(
+    weeklyLogPath("/logs", "system"),
+    line,
+    configStore.get().systemLogFileMaxMb * 1024UL * 1024UL
+  );
 }
 
-String readTailText(const char *path, size_t maxBytes) {
+String readTailText(const String &path, size_t maxBytes) {
   if (!sdReady || !SD.exists(path)) return "Nessun log disponibile.";
   File file = SD.open(path, FILE_READ);
   if (!file) return "Impossibile leggere il log.";
@@ -246,6 +345,30 @@ String readTailText(const char *path, size_t maxBytes) {
   String output = file.readString();
   file.close();
   return output;
+}
+
+String readLatestLogTail(size_t maxBytes) {
+  const std::vector<String> paths = listNdjsonFiles("/logs", "system");
+  if (paths.empty()) return "Nessun log disponibile.";
+  return readTailText(paths.back(), maxBytes);
+}
+
+void pruneExpiredArchives() {
+  const DeviceConfig &config = configStore.get();
+  if (!sdReady || config.historyKeepForever) return;
+  const time_t now = time(nullptr);
+  if (now < 1700000000) return;
+  const time_t cutoff = now - static_cast<time_t>(config.historyRetentionDays) * 86400;
+  uint32_t removed = 0;
+  const std::vector<String> paths = listNdjsonFiles("/weights", "history");
+  for (const String &path : paths) {
+    File file = SD.open(path, FILE_READ);
+    if (!file) continue;
+    const time_t modified = file.getLastWrite();
+    file.close();
+    if (modified > 1700000000 && modified < cutoff && SD.remove(path)) ++removed;
+  }
+  if (removed) logSystem("info", "history_retention_pruned", "files=" + String(removed));
 }
 
 bool i2cProbe(uint8_t address) {
@@ -364,70 +487,138 @@ String buildSnapshotJson(const char *eventType, bool includeDelivery) {
   return json;
 }
 
-bool queueOutbound(const String &url, const String &token, const String &body) {
+void reportHeartbeatResult(bool ok, int code) {
+  portENTER_CRITICAL(&heartbeatResultMux);
+  heartbeatResultOk = ok;
+  heartbeatResultCode = code;
+  heartbeatResultPending = true;
+  portEXIT_CRITICAL(&heartbeatResultMux);
+}
+
+bool queueOutbound(const String &url, const String &token, const String &body, bool heartbeat = false) {
   if (url.isEmpty() || outboundQueue == nullptr) return false;
   OutboundMessage message{};
   strlcpy(message.url, url.c_str(), sizeof(message.url));
   strlcpy(message.token, token.c_str(), sizeof(message.token));
   strlcpy(message.caCertificate, configStore.get().tlsCaCertificate.c_str(), sizeof(message.caCertificate));
+  strlcpy(message.clientCertificate, configStore.get().tlsClientCertificate.c_str(), sizeof(message.clientCertificate));
+  strlcpy(message.clientPrivateKey, configStore.get().tlsClientPrivateKey.c_str(), sizeof(message.clientPrivateKey));
   strlcpy(message.body, body.c_str(), sizeof(message.body));
+  message.heartbeat = heartbeat;
   return xQueueSend(outboundQueue, &message, 0) == pdTRUE;
 }
 
 void integrationTask(void *) {
-  OutboundMessage message;
+  OutboundMessage *message = static_cast<OutboundMessage *>(malloc(sizeof(OutboundMessage)));
+  if (message == nullptr) {
+    integrationLastOk = false;
+    integrationLastCode = -5;
+    vTaskDelete(nullptr);
+    return;
+  }
   while (true) {
-    if (xQueueReceive(outboundQueue, &message, portMAX_DELAY) != pdTRUE) continue;
+    if (xQueueReceive(outboundQueue, message, portMAX_DELAY) != pdTRUE) continue;
     if (WiFi.status() != WL_CONNECTED) {
       integrationLastOk = false;
       integrationLastCode = -1;
+      if (message->heartbeat) reportHeartbeatResult(false, -1);
       continue;
     }
 
     HTTPClient http;
-    const String url(message.url);
+    const String url(message->url);
     int statusCode = -1;
     if (url.startsWith("https://")) {
       WiFiClientSecure client;
-      if (!strlen(message.caCertificate)) {
+      if (!strlen(message->caCertificate)) {
         integrationLastOk = false;
         integrationLastCode = -2;
+        if (message->heartbeat) reportHeartbeatResult(false, -2);
         continue;
       }
-      client.setCACert(message.caCertificate);
+      client.setCACert(message->caCertificate);
+      if (strlen(message->clientCertificate) && strlen(message->clientPrivateKey)) {
+        client.setCertificate(message->clientCertificate);
+        client.setPrivateKey(message->clientPrivateKey);
+      }
       if (http.begin(client, url)) {
         http.setTimeout(3500);
         http.addHeader("Content-Type", "application/json");
-        if (strlen(message.token)) http.addHeader("Authorization", "Bearer " + String(message.token));
-        statusCode = http.POST(reinterpret_cast<uint8_t *>(message.body), strlen(message.body));
+        if (strlen(message->token)) http.addHeader("Authorization", "Bearer " + String(message->token));
+        statusCode = http.POST(reinterpret_cast<uint8_t *>(message->body), strlen(message->body));
         http.end();
       }
     } else {
-      WiFiClient client;
-      if (http.begin(client, url)) {
-        http.setTimeout(3500);
-        http.addHeader("Content-Type", "application/json");
-        if (strlen(message.token)) http.addHeader("Authorization", "Bearer " + String(message.token));
-        statusCode = http.POST(reinterpret_cast<uint8_t *>(message.body), strlen(message.body));
-        http.end();
-      }
+      statusCode = -4;
     }
     integrationLastCode = statusCode;
     integrationLastOk = statusCode >= 200 && statusCode < 300;
+    if (message->heartbeat) reportHeartbeatResult(integrationLastOk, statusCode);
   }
 }
 
 void recordWeightEvent() {
   ++sequenceNumber;
   const String record = buildSnapshotJson("scale.snapshot", true);
-  appendLine("/weights/history.ndjson", record, kHistoryLogLimit);
+  const DeviceConfig &config = configStore.get();
+  if (config.historyEnabled) {
+    appendLine(
+      weeklyLogPath("/weights", "history"),
+      record,
+      config.historyFileMaxMb * 1024UL * 1024UL
+    );
+  }
   queueOutbound(configStore.get().backendUrl, configStore.get().backendToken, buildSnapshotJson("scale.snapshot", false));
 }
 
 void sendHeartbeat() {
-  if (!currentSnapshot.valid) return;
+  if (configStore.get().backendUrl.isEmpty()) return;
   ++sequenceNumber;
-  queueOutbound(configStore.get().backendUrl, configStore.get().backendToken, buildSnapshotJson("scale.heartbeat", false));
+  if (!queueOutbound(
+    configStore.get().backendUrl,
+    configStore.get().backendToken,
+    buildSnapshotJson("scale.heartbeat", false),
+    true
+  )) reportHeartbeatResult(false, -3);
+}
+
+void processHeartbeatResult() {
+  bool pending;
+  bool ok;
+  int code;
+  portENTER_CRITICAL(&heartbeatResultMux);
+  pending = heartbeatResultPending;
+  ok = heartbeatResultOk;
+  code = heartbeatResultCode;
+  heartbeatResultPending = false;
+  portEXIT_CRITICAL(&heartbeatResultMux);
+  if (!pending) return;
+
+  DeviceConfig &config = configStore.mutableConfig();
+  if (ok) {
+    const bool recovered = heartbeatConsecutiveFailures > 0 || config.heartbeatRestartSuppressed;
+    heartbeatConsecutiveFailures = 0;
+    lastHeartbeatAckAt = timestampIso();
+    if (config.heartbeatRestartSuppressed) {
+      config.heartbeatRestartSuppressed = false;
+      configStore.saveHeartbeatRestartSuppressed();
+    }
+    if (recovered) logSystem("info", "heartbeat_recovered", "code=" + String(code));
+    return;
+  }
+
+  if (heartbeatConsecutiveFailures < 255) ++heartbeatConsecutiveFailures;
+  logSystem(
+    "warning",
+    "heartbeat_failed",
+    "code=" + String(code) + " failures=" + String(heartbeatConsecutiveFailures)
+  );
+  if (!config.heartbeatWatchdogEnabled || config.heartbeatRestartSuppressed ||
+      heartbeatConsecutiveFailures < config.heartbeatFailureThreshold) return;
+  config.heartbeatRestartSuppressed = true;
+  configStore.saveHeartbeatRestartSuppressed();
+  logSystem("error", "heartbeat_watchdog_restart", "failures=" + String(heartbeatConsecutiveFailures));
+  scheduledRestartMs = millis() + 1200;
 }
 
 void sendPowerEvent(bool externalPower) {
@@ -504,15 +695,60 @@ void connectNetwork() {
   }
 }
 
+void sendSecurityHeaders() {
+  webServer.sendHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; "
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+  );
+  webServer.sendHeader("X-Content-Type-Options", "nosniff");
+  webServer.sendHeader("X-Frame-Options", "DENY");
+  webServer.sendHeader("Referrer-Policy", "no-referrer");
+  webServer.sendHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+}
+
+bool constantTimeEqual(const String &left, const String &right) {
+  const size_t maximum = std::max(left.length(), right.length());
+  uint8_t difference = static_cast<uint8_t>(left.length() ^ right.length());
+  for (size_t index = 0; index < maximum; ++index) {
+    const uint8_t a = index < left.length() ? left[index] : 0;
+    const uint8_t b = index < right.length() ? right[index] : 0;
+    difference |= a ^ b;
+  }
+  return difference == 0;
+}
+
 bool authorized() {
-  if (!configStore.isProvisioned() && accessPointActive) return true;
+  sendSecurityHeaders();
+  const uint32_t now = millis();
+  if (authBlockedUntilMs != 0 && static_cast<int32_t>(authBlockedUntilMs - now) > 0) {
+    webServer.sendHeader("Retry-After", "60");
+    webServer.send(429, "application/json; charset=utf-8", "{\"error\":\"Troppi tentativi; riprovare tra un minuto\"}");
+    return false;
+  }
   const DeviceConfig &config = configStore.get();
-  if (webServer.authenticate(config.adminUser.c_str(), config.adminPassword.c_str())) return true;
-  webServer.requestAuthentication(BASIC_AUTH, "Laveggio Printomatic");
+  if (webServer.authenticate(config.adminUser.c_str(), config.adminPassword.c_str())) {
+    authFailures = 0;
+    authBlockedUntilMs = 0;
+    if (webServer.method() != HTTP_GET && !constantTimeEqual(webServer.header("X-CSRF-Token"), csrfToken)) {
+      webServer.send(403, "application/json; charset=utf-8", "{\"error\":\"Token CSRF non valido\"}");
+      return false;
+    }
+    return true;
+  }
+  if (!webServer.header("Authorization").isEmpty()) {
+    if (authFailures < 255) ++authFailures;
+    if (authFailures >= kAuthFailureLimit) {
+      authBlockedUntilMs = now + kAuthBlockMs;
+      logSystem("warning", "web_auth_rate_limited");
+    }
+  }
+  webServer.requestAuthentication(DIGEST_AUTH, "Laveggio Printomatic");
   return false;
 }
 
 void sendJson(const String &json, int status = 200) {
+  sendSecurityHeaders();
   webServer.sendHeader("Cache-Control", "no-store");
   webServer.send(status, "application/json; charset=utf-8", json);
 }
@@ -531,6 +767,8 @@ String buildStatusJson() {
   json += ",\"free_heap\":" + String(ESP.getFreeHeap());
   json += ",\"reset_reason\":" + quoted(resetReasonLabel());
   json += ",\"device_time\":" + quoted(timestampIso());
+  const time_t nowEpoch = time(nullptr);
+  json += ",\"booted_at\":" + quoted(timestampIso(nowEpoch - millis() / 1000));
   json += ",\"display_on\":" + boolJson(displayOn);
   json += ",\"scan_rate_hz\":" + String(scansPerSecond);
   json += ",\"network\":{\"connected\":" + boolJson(WiFi.status() == WL_CONNECTED);
@@ -542,14 +780,31 @@ String buildStatusJson() {
   json += ",\"integration\":{\"configured\":" + boolJson(!config.backendUrl.isEmpty());
   json += ",\"last_ok\":" + boolJson(integrationLastOk);
   json += ",\"last_code\":" + String(integrationLastCode);
-  json += ",\"sequence\":" + String(sequenceNumber) + "}";
+  json += ",\"sequence\":" + String(sequenceNumber);
+  json += ",\"tls_verified\":" + boolJson(config.backendUrl.startsWith("https://") && !config.tlsCaCertificate.isEmpty());
+  json += ",\"mtls_enabled\":" + boolJson(!config.tlsClientCertificate.isEmpty() && !config.tlsClientPrivateKey.isEmpty());
+  json += ",\"heartbeat_last_ack_at\":" + quoted(lastHeartbeatAckAt);
+  json += ",\"heartbeat_failures\":" + String(heartbeatConsecutiveFailures);
+  json += ",\"watchdog_enabled\":" + boolJson(config.heartbeatWatchdogEnabled);
+  json += ",\"watchdog_suppressed\":" + boolJson(config.heartbeatRestartSuppressed) + "}";
   json += ",\"storage\":{\"ready\":" + boolJson(sdReady);
   json += ",\"total_bytes\":" + String(sdReady ? SD.totalBytes() : 0);
   json += ",\"used_bytes\":" + String(sdReady ? SD.usedBytes() : 0) + "}";
   const String powerLabel = !config.powerSenseEnabled ? "Non configurato" :
     (externalPowerPresent ? "Rete elettrica" : "Batteria UPS");
   json += ",\"power\":{\"external\":" + boolJson(externalPowerPresent);
-  json += ",\"source_label\":" + quoted(powerLabel) + "}";
+  json += ",\"source_label\":" + quoted(powerLabel);
+  json += ",\"battery_configured\":" + boolJson(config.batterySenseEnabled);
+  json += ",\"battery_voltage_mv\":" + String(batteryVoltageMv);
+  json += ",\"battery_percent\":" + String(estimatedBatteryPercent());
+  json += ",\"battery_capacity_mah\":" + String(config.batteryCapacityMah);
+  json += ",\"current_sensor_configured\":false}";
+  json += ",\"security\":{\"portal_auth\":\"digest\",\"portal_https\":false";
+  json += ",\"csrf_protected\":true,\"rate_limit_enabled\":true";
+  json += ",\"default_credentials_active\":" + boolJson(
+    config.adminUser == "info@casklogic.com" && config.adminPassword == "Presario41740+"
+  );
+  json += ",\"vlan_managed_by_network\":true}";
   json += ",\"snapshot\":{\"valid\":" + boolJson(currentSnapshot.valid);
   json += ",\"stable\":" + boolJson(currentSnapshot.stable);
   json += ",\"weight_kg\":" + String(currentSnapshot.weightKg);
@@ -583,7 +838,7 @@ String buildStatusJson() {
 String buildSettingsJson() {
   const DeviceConfig &config = configStore.get();
   String json;
-  json.reserve(1200);
+  json.reserve(5200);
   json += "{\"device_id\":" + quoted(config.deviceId);
   json += ",\"hostname\":" + quoted(config.hostname);
   json += ",\"wifi_ssid\":" + quoted(config.wifiSsid);
@@ -594,14 +849,29 @@ String buildSettingsJson() {
   json += ",\"dns\":" + quoted(config.dns);
   json += ",\"backend_url\":" + quoted(config.backendUrl);
   json += ",\"tls_ca_certificate\":" + quoted(config.tlsCaCertificate);
+  json += ",\"tls_client_certificate\":" + quoted(config.tlsClientCertificate);
+  json += ",\"tls_client_key_configured\":" + boolJson(!config.tlsClientPrivateKey.isEmpty());
   json += ",\"notification_url\":" + quoted(config.notificationUrl);
   json += ",\"stable_ms\":" + String(config.stableWindowMs);
   json += ",\"heartbeat_seconds\":" + String(config.heartbeatSeconds);
+  json += ",\"heartbeat_watchdog_enabled\":" + boolJson(config.heartbeatWatchdogEnabled);
+  json += ",\"heartbeat_failure_threshold\":" + String(config.heartbeatFailureThreshold);
   json += ",\"ntp_server\":" + quoted(config.ntpServer);
   json += ",\"timezone\":" + quoted(config.timezone);
   json += ",\"admin_user\":" + quoted(config.adminUser);
   json += ",\"display_default_on\":" + boolJson(config.displayDefaultOn);
-  json += ",\"power_sense_enabled\":" + boolJson(config.powerSenseEnabled) + "}";
+  json += ",\"power_sense_enabled\":" + boolJson(config.powerSenseEnabled);
+  json += ",\"history_enabled\":" + boolJson(config.historyEnabled);
+  json += ",\"history_keep_forever\":" + boolJson(config.historyKeepForever);
+  json += ",\"history_retention_days\":" + String(config.historyRetentionDays);
+  json += ",\"history_file_max_mb\":" + String(config.historyFileMaxMb);
+  json += ",\"system_log_file_max_mb\":" + String(config.systemLogFileMaxMb);
+  json += ",\"battery_sense_enabled\":" + boolJson(config.batterySenseEnabled);
+  json += ",\"battery_divider_milli\":" + String(config.batteryDividerMilli);
+  json += ",\"battery_min_mv\":" + String(config.batteryMinMv);
+  json += ",\"battery_max_mv\":" + String(config.batteryMaxMv);
+  json += ",\"battery_capacity_mah\":" + String(config.batteryCapacityMah);
+  json += ",\"csrf_token\":" + quoted(csrfToken) + "}";
   return json;
 }
 
@@ -629,13 +899,156 @@ String buildCalibrationJson() {
   return json;
 }
 
-String buildHistoryJson(size_t limit) {
+struct HistoryQuery {
+  size_t limit = 20;
+  String from;
+  String to;
+  String digits;
+  String delivery;
+  String sort = "captured_at";
+  bool descending = true;
+  bool minimumWeightSet = false;
+  bool maximumWeightSet = false;
+  bool sequenceSet = false;
+  long minimumWeight = 0;
+  long maximumWeight = 0;
+  long sequence = 0;
+};
+
+int jsonFieldStart(const String &line, const char *field) {
+  return line.indexOf(String('"') + field + "\":");
+}
+
+String jsonStringField(const String &line, const char *field) {
+  const int marker = jsonFieldStart(line, field);
+  if (marker < 0) return "";
+  int start = line.indexOf('"', marker + strlen(field) + 3);
+  if (start < 0) return "";
+  ++start;
+  int end = start;
+  while (end < static_cast<int>(line.length())) {
+    if (line[end] == '"' && (end == start || line[end - 1] != '\\')) break;
+    ++end;
+  }
+  return line.substring(start, end);
+}
+
+long jsonLongField(const String &line, const char *field) {
+  const int marker = jsonFieldStart(line, field);
+  if (marker < 0) return 0;
+  int start = marker + strlen(field) + 3;
+  while (start < static_cast<int>(line.length()) && (line[start] == ' ' || line[start] == ':')) ++start;
+  return strtol(line.c_str() + start, nullptr, 10);
+}
+
+String jsonDigitsField(const String &line) {
+  const int marker = jsonFieldStart(line, "digits");
+  if (marker < 0) return "";
+  const int start = line.indexOf('[', marker);
+  const int end = line.indexOf(']', start);
+  if (start < 0 || end < 0) return "";
+  String digits = line.substring(start + 1, end);
+  digits.replace(",", ".");
+  digits.replace(" ", "");
+  return digits;
+}
+
+HistoryQuery historyQueryFromRequest(bool includeLimit = true) {
+  HistoryQuery query;
+  if (includeLimit) {
+    const int requestedLimit = webServer.arg("limit").toInt();
+    query.limit = constrain(requestedLimit > 0 ? requestedLimit : 20, 1, 100);
+  }
+  query.from = webServer.arg("from");
+  query.to = webServer.arg("to");
+  if (query.from.length() == 16) query.from += ":00";
+  if (query.to.length() == 16) query.to += ":59";
+  query.digits = webServer.arg("digits");
+  query.digits.replace(" ", "");
+  query.delivery = webServer.arg("delivery");
+  const String requestedSort = webServer.arg("sort");
+  if (requestedSort == "captured_at" || requestedSort == "weight_kg" ||
+      requestedSort == "digits" || requestedSort == "sequence" || requestedSort == "delivery") {
+    query.sort = requestedSort;
+  }
+  query.descending = webServer.arg("direction") != "asc";
+  query.minimumWeightSet = webServer.hasArg("min_weight") && !webServer.arg("min_weight").isEmpty();
+  query.maximumWeightSet = webServer.hasArg("max_weight") && !webServer.arg("max_weight").isEmpty();
+  query.sequenceSet = webServer.hasArg("sequence") && !webServer.arg("sequence").isEmpty();
+  query.minimumWeight = webServer.arg("min_weight").toInt();
+  query.maximumWeight = webServer.arg("max_weight").toInt();
+  query.sequence = webServer.arg("sequence").toInt();
+  return query;
+}
+
+bool historyLineMatches(const String &line, const HistoryQuery &query) {
+  const String capturedAt = jsonStringField(line, "captured_at").substring(0, 19);
+  const long weight = jsonLongField(line, "weight_kg");
+  if (!query.from.isEmpty() && capturedAt < query.from) return false;
+  if (!query.to.isEmpty() && capturedAt > query.to) return false;
+  if (query.minimumWeightSet && weight < query.minimumWeight) return false;
+  if (query.maximumWeightSet && weight > query.maximumWeight) return false;
+  if (query.sequenceSet && jsonLongField(line, "sequence") != query.sequence) return false;
+  if (!query.digits.isEmpty() && jsonDigitsField(line).indexOf(query.digits) < 0) return false;
+  if (!query.delivery.isEmpty() && jsonStringField(line, "delivery") != query.delivery) return false;
+  return true;
+}
+
+int compareHistoryLines(const String &left, const String &right, const HistoryQuery &query) {
+  if (query.sort == "weight_kg" || query.sort == "sequence") {
+    const long a = jsonLongField(left, query.sort.c_str());
+    const long b = jsonLongField(right, query.sort.c_str());
+    if (a != b) return a < b ? -1 : 1;
+  } else {
+    const String a = query.sort == "digits" ? jsonDigitsField(left) : jsonStringField(left, query.sort.c_str());
+    const String b = query.sort == "digits" ? jsonDigitsField(right) : jsonStringField(right, query.sort.c_str());
+    const int compared = a.compareTo(b);
+    if (compared != 0) return compared < 0 ? -1 : 1;
+  }
+  const long aSequence = jsonLongField(left, "sequence");
+  const long bSequence = jsonLongField(right, "sequence");
+  return aSequence == bSequence ? 0 : (aSequence < bSequence ? -1 : 1);
+}
+
+bool historyComesBefore(const String &left, const String &right, const HistoryQuery &query) {
+  const int compared = compareHistoryLines(left, right, query);
+  return query.descending ? compared > 0 : compared < 0;
+}
+
+bool isDefaultRecentHistoryQuery(const HistoryQuery &query) {
+  return query.from.isEmpty() && query.to.isEmpty() && query.digits.isEmpty() &&
+    query.delivery.isEmpty() && !query.minimumWeightSet && !query.maximumWeightSet &&
+    !query.sequenceSet && query.sort == "captured_at" && query.descending;
+}
+
+String buildHistoryJson(const HistoryQuery &query) {
   const std::vector<String> paths = listNdjsonFiles("/weights", "history");
   if (paths.empty()) return "{\"items\":[]}";
   const size_t tailBytes = 128UL * 1024UL;
   std::vector<String> lines;
-  lines.reserve(limit);
-  for (auto path = paths.rbegin(); path != paths.rend() && lines.size() < limit; ++path) {
+  lines.reserve(query.limit + 1);
+  if (!isDefaultRecentHistoryQuery(query)) {
+    for (const String &path : paths) {
+      File file = SD.open(path, FILE_READ);
+      if (!file) continue;
+      while (file.available()) {
+        String line = file.readStringUntil('\n');
+        line.trim();
+        if (line.isEmpty() || !historyLineMatches(line, query)) continue;
+        const auto position = std::lower_bound(
+          lines.begin(),
+          lines.end(),
+          line,
+          [&query](const String &left, const String &right) {
+            return historyComesBefore(left, right, query);
+          }
+        );
+        lines.insert(position, line);
+        if (lines.size() > query.limit) lines.pop_back();
+      }
+      file.close();
+    }
+  } else for (auto path = paths.rbegin(); path != paths.rend() && lines.size() < query.limit; ++path) {
     File file = SD.open(*path, FILE_READ);
     if (!file) continue;
     const size_t start = file.size() > tailBytes ? file.size() - tailBytes : 0;
@@ -648,7 +1061,7 @@ String buildHistoryJson(size_t limit) {
       if (!line.isEmpty()) fileLines.push_back(line);
     }
     file.close();
-    for (auto line = fileLines.rbegin(); line != fileLines.rend() && lines.size() < limit; ++line) {
+    for (auto line = fileLines.rbegin(); line != fileLines.rend() && lines.size() < query.limit; ++line) {
       lines.push_back(*line);
     }
   }
@@ -659,6 +1072,31 @@ String buildHistoryJson(size_t limit) {
   }
   json += "]}";
   return json;
+}
+
+void streamFilteredHistoryExport(const HistoryQuery &query) {
+  const std::vector<String> paths = listNdjsonFiles("/weights", "history");
+  if (paths.empty()) {
+    sendError(404, "Storico non disponibile");
+    return;
+  }
+  sendSecurityHeaders();
+  webServer.sendHeader("Cache-Control", "no-store");
+  webServer.sendHeader("Content-Disposition", "attachment; filename=laveggio-pesate-filtrate.ndjson");
+  webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  webServer.send(200, "application/x-ndjson", "");
+  for (const String &path : paths) {
+    File file = SD.open(path, FILE_READ);
+    if (!file) continue;
+    while (file.available()) {
+      String line = file.readStringUntil('\n');
+      line.trim();
+      if (line.isEmpty() || !historyLineMatches(line, query)) continue;
+      webServer.sendContent(line + "\n");
+    }
+    file.close();
+  }
+  webServer.sendContent("");
 }
 
 void streamNdjsonExport(
@@ -672,6 +1110,7 @@ void streamNdjsonExport(
     sendError(404, emptyMessage);
     return;
   }
+  sendSecurityHeaders();
   webServer.sendHeader("Cache-Control", "no-store");
   webServer.sendHeader("Content-Disposition", "attachment; filename=" + String(downloadName));
   webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
@@ -692,19 +1131,29 @@ void streamNdjsonExport(
 }
 
 void registerWebRoutes() {
+  const char *requestHeaders[] = {"Authorization", "X-CSRF-Token"};
+  webServer.collectHeaders(requestHeaders, 2);
   webServer.on("/", HTTP_GET, [] {
+    if (!authorized()) return;
+    sendSecurityHeaders();
     webServer.sendHeader("Cache-Control", "no-cache");
     webServer.send_P(200, "text/html; charset=utf-8", WEB_INDEX_HTML);
   });
   webServer.on("/app.css", HTTP_GET, [] {
+    if (!authorized()) return;
+    sendSecurityHeaders();
     webServer.sendHeader("Cache-Control", "public, max-age=3600");
     webServer.send_P(200, "text/css; charset=utf-8", WEB_APP_CSS);
   });
   webServer.on("/app.js", HTTP_GET, [] {
+    if (!authorized()) return;
+    sendSecurityHeaders();
     webServer.sendHeader("Cache-Control", "public, max-age=3600");
     webServer.send_P(200, "application/javascript; charset=utf-8", WEB_APP_JS);
   });
   webServer.on("/casklogicmark.png", HTTP_GET, [] {
+    if (!authorized()) return;
+    sendSecurityHeaders();
     webServer.sendHeader("Cache-Control", "public, max-age=86400");
     webServer.send_P(
       200,
@@ -728,22 +1177,17 @@ void registerWebRoutes() {
   });
   webServer.on("/api/history", HTTP_GET, [] {
     if (!authorized()) return;
-    const size_t limit = constrain(webServer.arg("limit").toInt(), 1, 100);
-    sendJson(buildHistoryJson(limit));
+    sendJson(buildHistoryJson(historyQueryFromRequest()));
   });
   webServer.on("/api/history/export", HTTP_GET, [] {
     if (!authorized()) return;
-    streamNdjsonExport(
-      "/weights",
-      "history",
-      "laveggio-history-completo.ndjson",
-      "Storico non disponibile"
-    );
+    streamFilteredHistoryExport(historyQueryFromRequest(false));
   });
   webServer.on("/api/logs", HTTP_GET, [] {
     if (!authorized()) return;
+    sendSecurityHeaders();
     webServer.sendHeader("Cache-Control", "no-store");
-    webServer.send(200, "text/plain; charset=utf-8", readTailText("/logs/system.ndjson", 24000));
+    webServer.send(200, "text/plain; charset=utf-8", readLatestLogTail(24000));
   });
   webServer.on("/api/logs/export", HTTP_GET, [] {
     if (!authorized()) return;
@@ -817,9 +1261,15 @@ void registerWebRoutes() {
 
   webServer.on("/api/settings/network", HTTP_POST, [] {
     if (!authorized()) return;
+    const String ssid = webServer.arg("wifi_ssid");
+    const String password = webServer.arg("wifi_password");
+    if (ssid.length() > 32 || password.length() > 63) {
+      sendError(400, "SSID o password Wi-Fi oltre i limiti consentiti");
+      return;
+    }
     DeviceConfig &config = configStore.mutableConfig();
-    config.wifiSsid = webServer.arg("wifi_ssid");
-    if (!webServer.arg("wifi_password").isEmpty()) config.wifiPassword = webServer.arg("wifi_password");
+    config.wifiSsid = ssid;
+    if (!password.isEmpty()) config.wifiPassword = password;
     config.useDhcp = parseBool(webServer.arg("use_dhcp"));
     config.staticIp = webServer.arg("static_ip");
     config.gateway = webServer.arg("gateway");
@@ -833,14 +1283,58 @@ void registerWebRoutes() {
 
   webServer.on("/api/settings/integration", HTTP_POST, [] {
     if (!authorized()) return;
+    const String backendUrl = webServer.arg("backend_url");
+    const String notificationUrl = webServer.arg("notification_url");
+    const String caCertificate = webServer.arg("tls_ca_certificate");
+    const String clientCertificate = webServer.arg("tls_client_certificate");
+    const String clientPrivateKey = webServer.arg("tls_client_private_key");
+    const String backendToken = webServer.arg("backend_token");
+    const String deviceId = webServer.arg("device_id");
+    if (backendUrl.length() >= sizeof(OutboundMessage::url) ||
+        notificationUrl.length() >= sizeof(OutboundMessage::url) ||
+        backendToken.length() >= sizeof(OutboundMessage::token) ||
+        caCertificate.length() >= sizeof(OutboundMessage::caCertificate) ||
+        clientCertificate.length() >= sizeof(OutboundMessage::clientCertificate) ||
+        clientPrivateKey.length() >= sizeof(OutboundMessage::clientPrivateKey) ||
+        deviceId.length() > 96) {
+      sendError(400, "Uno o piu campi superano i limiti del dispositivo");
+      return;
+    }
+    if ((!backendUrl.isEmpty() && !backendUrl.startsWith("https://")) ||
+        (!notificationUrl.isEmpty() && !notificationUrl.startsWith("https://"))) {
+      sendError(400, "Gli endpoint remoti devono usare HTTPS");
+      return;
+    }
+    if ((!backendUrl.isEmpty() || !notificationUrl.isEmpty()) && caCertificate.isEmpty()) {
+      sendError(400, "Certificato CA richiesto per verificare HTTPS");
+      return;
+    }
+    const String effectivePrivateKey = clientPrivateKey.isEmpty()
+      ? configStore.get().tlsClientPrivateKey
+      : clientPrivateKey;
+    if (!clientCertificate.isEmpty() && effectivePrivateKey.isEmpty()) {
+      sendError(400, "Chiave privata richiesta per abilitare mTLS");
+      return;
+    }
     DeviceConfig &config = configStore.mutableConfig();
-    config.deviceId = webServer.arg("device_id");
-    config.backendUrl = webServer.arg("backend_url");
-    if (!webServer.arg("backend_token").isEmpty()) config.backendToken = webServer.arg("backend_token");
-    config.tlsCaCertificate = webServer.arg("tls_ca_certificate");
-    config.notificationUrl = webServer.arg("notification_url");
+    config.deviceId = deviceId;
+    config.backendUrl = backendUrl;
+    if (!backendToken.isEmpty()) config.backendToken = backendToken;
+    config.tlsCaCertificate = caCertificate;
+    config.notificationUrl = notificationUrl;
+    if (clientCertificate.isEmpty()) {
+      config.tlsClientCertificate = "";
+      config.tlsClientPrivateKey = "";
+    } else {
+      config.tlsClientCertificate = clientCertificate;
+      config.tlsClientPrivateKey = effectivePrivateKey;
+    }
     config.stableWindowMs = constrain(webServer.arg("stable_ms").toInt(), 100, 5000);
     config.heartbeatSeconds = constrain(webServer.arg("heartbeat_seconds").toInt(), 5, 3600);
+    config.heartbeatWatchdogEnabled = parseBool(webServer.arg("heartbeat_watchdog_enabled"));
+    config.heartbeatFailureThreshold = constrain(webServer.arg("heartbeat_failure_threshold").toInt(), 3, 20);
+    config.heartbeatRestartSuppressed = false;
+    heartbeatConsecutiveFailures = 0;
     stabilityTracker.setStableWindow(config.stableWindowMs);
     configStore.saveSettings();
     logSystem("info", "integration_settings_saved");
@@ -849,21 +1343,50 @@ void registerWebRoutes() {
 
   webServer.on("/api/settings/system", HTTP_POST, [] {
     if (!authorized()) return;
+    const String hostname = webServer.arg("hostname");
+    const String ntpServer = webServer.arg("ntp_server");
+    const String timezone = webServer.arg("timezone");
+    const String adminUser = webServer.arg("admin_user");
+    const String adminPassword = webServer.arg("admin_password");
+    const uint16_t batteryMinMv = constrain(webServer.arg("battery_min_mv").toInt(), 2500, 4200);
+    const uint16_t batteryMaxMv = constrain(webServer.arg("battery_max_mv").toInt(), 3500, 5000);
+    if (hostname.isEmpty() || hostname.length() > 63 || ntpServer.isEmpty() ||
+        ntpServer.length() > 128 || timezone.isEmpty() || timezone.length() > 128 ||
+        adminUser.isEmpty() || adminUser.length() > 128) {
+      sendError(400, "Nome host, NTP, fuso orario e utente sono obbligatori");
+      return;
+    }
+    if (!adminPassword.isEmpty() && adminPassword.length() < 8) {
+      sendError(400, "La password deve avere almeno 8 caratteri");
+      return;
+    }
+    if (batteryMaxMv <= batteryMinMv) {
+      sendError(400, "La tensione massima batteria deve superare la minima");
+      return;
+    }
     DeviceConfig &config = configStore.mutableConfig();
-    config.hostname = webServer.arg("hostname");
-    config.ntpServer = webServer.arg("ntp_server");
-    config.timezone = webServer.arg("timezone");
-    config.adminUser = webServer.arg("admin_user");
+    config.hostname = hostname;
+    config.ntpServer = ntpServer;
+    config.timezone = timezone;
+    config.adminUser = adminUser;
     if (!webServer.arg("admin_password").isEmpty()) {
-      if (webServer.arg("admin_password").length() < 8) {
-        sendError(400, "La password deve avere almeno 8 caratteri");
-        return;
-      }
-      config.adminPassword = webServer.arg("admin_password");
+      config.adminPassword = adminPassword;
     }
     config.displayDefaultOn = parseBool(webServer.arg("display_default_on"));
     config.powerSenseEnabled = parseBool(webServer.arg("power_sense_enabled"));
+    config.historyEnabled = parseBool(webServer.arg("history_enabled"));
+    config.historyKeepForever = parseBool(webServer.arg("history_keep_forever"));
+    config.historyRetentionDays = constrain(webServer.arg("history_retention_days").toInt(), 1, 3650);
+    config.historyFileMaxMb = constrain(webServer.arg("history_file_max_mb").toInt(), 1, 256);
+    config.systemLogFileMaxMb = constrain(webServer.arg("system_log_file_max_mb").toInt(), 1, 128);
+    config.batterySenseEnabled = parseBool(webServer.arg("battery_sense_enabled"));
+    config.batteryDividerMilli = constrain(webServer.arg("battery_divider_milli").toInt(), 1000, 10000);
+    config.batteryMinMv = batteryMinMv;
+    config.batteryMaxMv = batteryMaxMv;
+    config.batteryCapacityMah = constrain(webServer.arg("battery_capacity_mah").toInt(), 100, 20000);
     configStore.saveSettings();
+    pruneExpiredArchives();
+    logSystem("info", "system_settings_saved");
     sendJson("{\"ok\":true}");
   });
 
@@ -929,10 +1452,12 @@ void registerWebRoutes() {
   );
 
   webServer.onNotFound([] {
+    if (!authorized()) return;
     if (webServer.uri().startsWith("/api/")) {
       sendError(404, "Endpoint non trovato");
       return;
     }
+    sendSecurityHeaders();
     webServer.sendHeader("Location", "/");
     webServer.send(302, "text/plain", "");
   });
@@ -968,18 +1493,43 @@ void checkPowerSource() {
   sendPowerEvent(externalPowerPresent);
 }
 
+void readBatteryStatus() {
+  const DeviceConfig &config = configStore.get();
+  if (!config.batterySenseEnabled) {
+    batteryVoltageMv = 0;
+    return;
+  }
+  const uint32_t adcMv = analogReadMilliVolts(kBatterySensePin);
+  batteryVoltageMv = static_cast<uint16_t>(
+    std::min<uint32_t>(65535, adcMv * config.batteryDividerMilli / 1000UL)
+  );
+}
+
 }  // namespace
 
 void setup() {
   Serial.begin(115200);
   delay(250);
   initializeIdentity();
+  char csrf[33];
+  snprintf(
+    csrf,
+    sizeof(csrf),
+    "%08lX%08lX%08lX%08lX",
+    static_cast<unsigned long>(esp_random()),
+    static_cast<unsigned long>(esp_random()),
+    static_cast<unsigned long>(esp_random()),
+    static_cast<unsigned long>(esp_random())
+  );
+  csrfToken = csrf;
   configStore.begin(deviceSuffix);
   stabilityTracker.setStableWindow(configStore.get().stableWindowMs);
 
   pinMode(kMuxReset, OUTPUT);
   digitalWrite(kMuxReset, HIGH);
   pinMode(kPowerSensePin, INPUT);
+  pinMode(kBatterySensePin, INPUT);
+  analogReadResolution(12);
   Wire.begin(kI2cSda, kI2cScl, 100000);
   Wire.setTimeOut(20);
   discoverMux();
@@ -992,9 +1542,9 @@ void setup() {
 
   Serial.printf("Rescue AP: %s\n", kRescueSsid);
   Serial.printf("Rescue password: %s\n", kRescuePassword);
-  Serial.printf("Web admin: %s / %s\n", configStore.get().adminUser.c_str(), configStore.get().adminPassword.c_str());
+  Serial.printf("Web admin: %s (password hidden)\n", configStore.get().adminUser.c_str());
 
-  outboundQueue = xQueueCreate(4, sizeof(OutboundMessage));
+  outboundQueue = xQueueCreate(2, sizeof(OutboundMessage));
   xTaskCreate(integrationTask, "integration", 8192, nullptr, 1, nullptr);
   connectNetwork();
   registerWebRoutes();
@@ -1002,6 +1552,7 @@ void setup() {
   externalPowerPresent = !configStore.get().powerSenseEnabled ||
     ((digitalRead(kPowerSensePin) == HIGH) == configStore.get().powerSenseActiveHigh);
   previousExternalPowerPresent = externalPowerPresent;
+  readBatteryStatus();
 }
 
 void loop() {
@@ -1009,6 +1560,7 @@ void loop() {
   dnsServer.processNextRequest();
   webServer.handleClient();
   maintainRescueAccessPoint(now);
+  processHeartbeatResult();
 
   if (now - lastSensorReadMs >= kSensorIntervalMs) {
     lastSensorReadMs = now;
@@ -1027,6 +1579,7 @@ void loop() {
     scanCounter = 0;
     lastScanCounterMs = now;
     checkPowerSource();
+    readBatteryStatus();
   }
 
   if (now - lastHeartbeatMs >= configStore.get().heartbeatSeconds * 1000UL) {
@@ -1037,6 +1590,12 @@ void loop() {
   if (now - lastDiagnosticLogMs >= kDiagnosticLogIntervalMs) {
     lastDiagnosticLogMs = now;
     recordSensorDiagnostics();
+  }
+
+  if ((lastRetentionMs == 0 && time(nullptr) > 1700000000) ||
+      now - lastRetentionMs >= kRetentionIntervalMs) {
+    lastRetentionMs = now;
+    pruneExpiredArchives();
   }
 
   if (WiFi.status() != WL_CONNECTED && now - lastReconnectMs >= kReconnectIntervalMs) {

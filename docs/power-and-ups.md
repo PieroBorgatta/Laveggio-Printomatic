@@ -36,3 +36,27 @@ Prima del montaggio definitivo misurare con il multimetro:
 
 Il rilevamento si abilita dalla pagina Sistema. Ogni transizione viene salvata
 nel log e inviata all'endpoint notifiche quando configurato.
+
+## Lettura opzionale della batteria
+
+La tensione della LiPo puo essere letta dal pad `BAT` del bq25185 tramite un
+partitore verso GPIO0:
+
+```text
+BAT bq25185 --- 100 kOhm ---+--- GPIO0 ESP32
+                            |
+                          100 kOhm
+                            |
+                           GND
+```
+
+Con rapporto `2,000`, una batteria a 4,2 V porta circa 2,1 V sul GPIO. Il BAT
+non deve essere collegato direttamente al GPIO. Il firmware mostra tensione,
+percentuale lineare stimata e capacita nominale configurata; la capacita
+predefinita e `1200 mAh` per la batteria AFTERTECH 103040 indicata. La
+percentuale non e una misura coulombmetrica e va verificata sotto carico.
+
+Il bq25185 non fornisce al firmware una misura diretta della corrente assorbita
+attraverso questo collegamento. Per visualizzare ampere e consumi reali serve
+un sensore di corrente dedicato. Pinout di riferimento:
+<https://learn.adafruit.com/adafruit-bq25185-usb-dc-solar-charger-with-5v-boost-board/pinouts>.

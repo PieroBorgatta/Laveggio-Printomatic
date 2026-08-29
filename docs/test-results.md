@@ -51,11 +51,12 @@ In assenza del dispositivo, il firmware in `firmware/production-gateway` è
 stato verificato con strumenti host:
 
 - compilazione PlatformIO per `esp32-c6-devkitc-1` con Arduino ESP32;
-- RAM statica `49.508 / 327.680 byte` (`15,1%`);
-- flash applicazione `1.548.522 / 1.900.544 byte` (`81,5%`);
+- RAM statica `49.916 / 327.680 byte` (`15,2%`);
+- flash applicazione `1.592.462 / 1.900.544 byte` (`83,8%`);
 - generazione automatica e inclusione degli asset web nel binario;
 - test Node.js del simulatore REST e delle regole di configurazione;
-- 11 test Node.js superati su API, segreti, calibrazione, storico e log;
+- 15 test Node.js superati su API, segreti, calibrazione, storico, filtri,
+  export, TLS, CSRF, header di sicurezza e log;
 - controllo sintattico del JavaScript eseguito nel browser;
 - verifica browser dell'interfaccia desktop e mobile tramite Playwright;
 - viewport verificati: `1440x1000` e `390x844`, tema chiaro e scuro;
