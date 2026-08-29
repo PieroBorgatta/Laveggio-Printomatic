@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="firmware/production-gateway/data/casklogicmark.png" width="112" alt="CaskLogic">
+  <img src="firmware/production-gateway/data/casklogicmark.png" width="104" alt="Marchio CaskLogic">
 </p>
+
+<h2 align="center">CaskLogic Solutions</h2>
 
 <h1 align="center">Laveggio Printomatic</h1>
 
@@ -64,16 +66,7 @@ non trasforma la microSD in un NAS.
 
 ## 📊 Autodiagnosi
 
-<table>
-  <tr>
-    <td width="74%" valign="top">
-      <img src="docs/assets/laveggio-autodiagnosi.png" alt="Autodiagnosi desktop">
-    </td>
-    <td width="26%" valign="top" align="center">
-      <img src="docs/assets/laveggio-autodiagnosi-mobile.png" width="260" alt="Autodiagnosi mobile">
-    </td>
-  </tr>
-</table>
+![Autodiagnosi Laveggio Printomatic](docs/assets/laveggio-autodiagnosi.png)
 
 La corrente assorbita è indicata come non disponibile perché il bq25185 non
 fornisce telemetria amperometrica. Tensione batteria, temperatura del chip,
