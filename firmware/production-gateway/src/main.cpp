@@ -25,7 +25,7 @@
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.0.0";
+constexpr char kFirmwareVersion[] = "1.0.1";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdCs = 4;
 constexpr uint8_t kI2cSda = 1;
@@ -35,9 +35,12 @@ constexpr uint8_t kPowerSensePin = 20;
 constexpr uint32_t kSensorIntervalMs = 20;
 constexpr uint32_t kHealthIntervalMs = 250;
 constexpr uint32_t kReconnectIntervalMs = 15000;
+constexpr uint32_t kRescueApShutdownDelayMs = 120000;
 constexpr uint32_t kDiagnosticLogIntervalMs = 60000;
 constexpr uint32_t kSystemLogLimit = 4UL * 1024UL * 1024UL;
 constexpr uint32_t kHistoryLogLimit = 12UL * 1024UL * 1024UL;
+constexpr char kRescueSsid[] = "Laveggio-PW-casklogic";
+constexpr char kRescuePassword[] = "casklogic";
 
 struct OutboundMessage {
   char url[256];
@@ -57,8 +60,6 @@ QueueHandle_t outboundQueue = nullptr;
 
 String deviceSuffix;
 String bootId;
-String rescueSsid;
-String rescuePassword;
 int8_t muxAddress = -1;
 bool sdReady = false;
 bool accessPointActive = false;
@@ -77,6 +78,7 @@ uint32_t lastScanCounterMs = 0;
 uint32_t lastReconnectMs = 0;
 uint32_t lastHeartbeatMs = 0;
 uint32_t lastDiagnosticLogMs = 0;
+uint32_t stationConnectedSinceMs = 0;
 uint32_t scheduledRestartMs = 0;
 
 String jsonEscape(const String &value) {
@@ -448,12 +450,36 @@ bool applyStaticNetworkConfig() {
 
 void startRescueAccessPoint() {
   if (accessPointActive) return;
+  stationConnectedSinceMs = 0;
   WiFi.mode(WIFI_AP_STA);
-  accessPointActive = WiFi.softAP(rescueSsid, rescuePassword);
+  accessPointActive = WiFi.softAP(kRescueSsid, kRescuePassword);
   if (accessPointActive) {
     dnsServer.start(53, "*", WiFi.softAPIP());
     logSystem("warning", "rescue_ap_started", WiFi.softAPIP().toString());
   }
+}
+
+void maintainRescueAccessPoint(uint32_t now) {
+  if (WiFi.status() != WL_CONNECTED) {
+    stationConnectedSinceMs = 0;
+    return;
+  }
+  if (stationConnectedSinceMs == 0) {
+    stationConnectedSinceMs = now;
+    const DeviceConfig &config = configStore.get();
+    configTzTime(config.timezone.c_str(), config.ntpServer.c_str());
+    logSystem("info", "wifi_reconnected", WiFi.localIP().toString());
+  }
+  if (!accessPointActive || now - stationConnectedSinceMs < kRescueApShutdownDelayMs) return;
+  if (!WiFi.softAPdisconnect(false)) {
+    stationConnectedSinceMs = now;
+    logSystem("warning", "rescue_ap_stop_failed");
+    return;
+  }
+  dnsServer.stop();
+  WiFi.mode(WIFI_STA);
+  accessPointActive = false;
+  logSystem("info", "rescue_ap_stopped", "station_stable_ms=" + String(kRescueApShutdownDelayMs));
 }
 
 void connectNetwork() {
@@ -469,6 +495,7 @@ void connectNetwork() {
   const uint32_t startedAt = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startedAt < 12000) delay(100);
   if (WiFi.status() == WL_CONNECTED) {
+    stationConnectedSinceMs = millis();
     configTzTime(config.timezone.c_str(), config.ntpServer.c_str());
     if (MDNS.begin(config.hostname.c_str())) MDNS.addService("http", "tcp", 80);
     logSystem("info", "wifi_connected", WiFi.localIP().toString());
@@ -920,8 +947,6 @@ void initializeIdentity() {
   char boot[24];
   snprintf(boot, sizeof(boot), "%s-%08lX", suffix, static_cast<unsigned long>(esp_random()));
   bootId = boot;
-  rescueSsid = "Laveggio-Setup-" + deviceSuffix;
-  rescuePassword = "Cask-" + deviceSuffix + "!";
 }
 
 void initializeStorage() {
@@ -965,8 +990,8 @@ void setup() {
   initializeStorage();
   logSystem("info", "device_started", "firmware=" + String(kFirmwareVersion));
 
-  Serial.printf("Rescue AP: %s\n", rescueSsid.c_str());
-  Serial.printf("Rescue password: %s\n", rescuePassword.c_str());
+  Serial.printf("Rescue AP: %s\n", kRescueSsid);
+  Serial.printf("Rescue password: %s\n", kRescuePassword);
   Serial.printf("Web admin: %s / %s\n", configStore.get().adminUser.c_str(), configStore.get().adminPassword.c_str());
 
   outboundQueue = xQueueCreate(4, sizeof(OutboundMessage));
@@ -983,6 +1008,7 @@ void loop() {
   const uint32_t now = millis();
   dnsServer.processNextRequest();
   webServer.handleClient();
+  maintainRescueAccessPoint(now);
 
   if (now - lastSensorReadMs >= kSensorIntervalMs) {
     lastSensorReadMs = now;

@@ -38,10 +38,10 @@ Artefatti principali:
 - `.pio/build/waveshare_esp32c6_lcd_147/firmware.bin`: aggiornamento OTA;
 - `.pio/build/waveshare_esp32c6_lcd_147/firmware.factory.bin`: prima installazione completa.
 
-Misure della build `1.0.0` verificata il 29 agosto 2026:
+Misure della build `1.0.1` verificata il 29 agosto 2026:
 
-- RAM statica: `49.532 / 327.680 byte` (`15,1%`);
-- flash applicazione: `1.547.712 / 1.900.544 byte` (`81,4%`).
+- RAM statica: `49.508 / 327.680 byte` (`15,1%`);
+- flash applicazione: `1.548.522 / 1.900.544 byte` (`81,5%`).
 
 La RAM allocata dinamicamente per coda HTTPS, task e richieste web non e
 compresa nel primo valore; prima dell'installazione operativa va quindi
@@ -65,14 +65,17 @@ sezioni dell'interfaccia senza la scheda collegata.
 
 Se non trova credenziali Wi-Fi salvate, il dispositivo crea:
 
-- SSID `Laveggio-Setup-XXXXXX`;
-- password `Cask-XXXXXX!`;
+- SSID `Laveggio-PW-casklogic`;
+- password `casklogic`;
 - indirizzo `http://192.168.4.1`.
 
-`XXXXXX` corrisponde alle ultime sei cifre del MAC. Durante questo primo
-provisioning l'interfaccia e raggiungibile solo dalla rete creata dal dispositivo.
-Dopo il salvataggio del Wi-Fi, le pagine richiedono l'utente `admin` e la stessa
-password iniziale; la password va cambiata dalla sezione Sistema.
+Lo stesso access point viene attivato se la rete configurata non e raggiungibile.
+Il dispositivo continua a tentare la riconnessione e spegne automaticamente
+l'access point dopo 120 secondi consecutivi di connessione stabile alla rete
+principale. Durante il primo provisioning l'interfaccia e raggiungibile dalla
+rete creata dal dispositivo. Dopo il salvataggio del Wi-Fi, le pagine richiedono
+l'utente `admin` e la password amministrativa generata mostrata sulla seriale;
+la password va cambiata dalla sezione Sistema.
 
 ## File sulla microSD
 
