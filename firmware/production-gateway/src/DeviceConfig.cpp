@@ -26,10 +26,23 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.dns = preferences_.getString("dns", "192.168.1.1");
   config_.backendUrl = preferences_.getString("backend_url", "");
   config_.backendToken = preferences_.getString("backend_tok", "");
+  config_.eventHmacSecret = preferences_.getString("event_hmac", "");
+  config_.metricsToken = preferences_.getString("metrics_tok", "");
   config_.tlsCaCertificate = preferences_.getString("tls_ca", "");
   config_.tlsClientCertificate = preferences_.getString("tls_cli_crt", "");
   config_.tlsClientPrivateKey = preferences_.getString("tls_cli_key", "");
   config_.notificationUrl = preferences_.getString("notify_url", "");
+  config_.configSyncEnabled = preferences_.getBool("cfg_sync", false);
+  config_.configSyncUrl = preferences_.getString("cfg_sync_url", "");
+  config_.configSyncSeconds = preferences_.getUInt("cfg_sync_s", 900);
+  config_.remoteConfigVersion = preferences_.getUInt("cfg_version", 0);
+  config_.mqttEnabled = preferences_.getBool("mqtt_enabled", false);
+  config_.mqttHost = preferences_.getString("mqtt_host", "");
+  config_.mqttPort = preferences_.getUShort("mqtt_port", 8883);
+  config_.mqttUsername = preferences_.getString("mqtt_user", "");
+  config_.mqttPassword = preferences_.getString("mqtt_pass", "");
+  config_.mqttBaseTopic = preferences_.getString("mqtt_topic", "casklogic/laveggio");
+  config_.mqttCommandsEnabled = preferences_.getBool("mqtt_cmd", false);
   config_.ntpServer = preferences_.getString("ntp", "pool.ntp.org");
   config_.timezone = preferences_.getString("timezone", "CET-1CEST,M3.5.0,M10.5.0/3");
   config_.adminUser = preferences_.getString("admin_user", "info@casklogic.com");
@@ -97,10 +110,23 @@ bool ConfigStore::saveSettings() {
   preferences_.putString("dns", config_.dns);
   preferences_.putString("backend_url", config_.backendUrl);
   preferences_.putString("backend_tok", config_.backendToken);
+  preferences_.putString("event_hmac", config_.eventHmacSecret);
+  preferences_.putString("metrics_tok", config_.metricsToken);
   preferences_.putString("tls_ca", config_.tlsCaCertificate);
   preferences_.putString("tls_cli_crt", config_.tlsClientCertificate);
   preferences_.putString("tls_cli_key", config_.tlsClientPrivateKey);
   preferences_.putString("notify_url", config_.notificationUrl);
+  preferences_.putBool("cfg_sync", config_.configSyncEnabled);
+  preferences_.putString("cfg_sync_url", config_.configSyncUrl);
+  preferences_.putUInt("cfg_sync_s", config_.configSyncSeconds);
+  preferences_.putUInt("cfg_version", config_.remoteConfigVersion);
+  preferences_.putBool("mqtt_enabled", config_.mqttEnabled);
+  preferences_.putString("mqtt_host", config_.mqttHost);
+  preferences_.putUShort("mqtt_port", config_.mqttPort);
+  preferences_.putString("mqtt_user", config_.mqttUsername);
+  preferences_.putString("mqtt_pass", config_.mqttPassword);
+  preferences_.putString("mqtt_topic", config_.mqttBaseTopic);
+  preferences_.putBool("mqtt_cmd", config_.mqttCommandsEnabled);
   preferences_.putString("ntp", config_.ntpServer);
   preferences_.putString("timezone", config_.timezone);
   preferences_.putString("admin_user", config_.adminUser);
@@ -128,6 +154,11 @@ bool ConfigStore::saveSettings() {
 
 bool ConfigStore::saveHeartbeatRestartSuppressed() {
   preferences_.putBool("hb_suppress", config_.heartbeatRestartSuppressed);
+  return true;
+}
+
+bool ConfigStore::saveRemoteConfigVersion() {
+  preferences_.putUInt("cfg_version", config_.remoteConfigVersion);
   return true;
 }
 

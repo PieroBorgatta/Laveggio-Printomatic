@@ -21,7 +21,8 @@
         <button class="nav-button" data-view="history"><span>03</span>Storico</button>
         <button class="nav-button" data-view="settings"><span>04</span>Rete e gestionale</button>
         <button class="nav-button" data-view="system"><span>05</span>Sistema</button>
-        <button class="nav-button" data-view="casklogic"><span>06</span>CaskLogic</button>
+        <button class="nav-button" data-view="diagnostics"><span>06</span>Autodiagnosi</button>
+        <button class="nav-button" data-view="casklogic"><span>07</span>CaskLogic</button>
       </nav>
       <div class="sidebar-status">
         <span class="status-dot" id="sidebar-dot"></span>
@@ -99,7 +100,7 @@
           <label><span>Peso max kg</span><input name="max_weight" type="number"></label>
           <label><span>Cifre</span><input name="digits" inputmode="numeric" placeholder="1.2.3.4"></label>
           <label><span>Sequenza</span><input name="sequence" type="number" min="0"></label>
-          <label><span>Invio</span><select name="delivery"><option value="">Tutti</option><option value="sent">Inviata</option><option value="queued">In coda</option><option value="local">Locale</option></select></label>
+          <label><span>Invio</span><select name="delivery"><option value="">Tutti</option><option value="sent">Inviata</option><option value="requested">Richiesta</option><option value="local">Locale</option></select></label>
           <div class="filter-actions"><button class="button secondary" type="reset">Azzera</button><button class="button primary" type="submit">Applica filtri</button></div>
         </form>
         <div class="panel table-panel"><table><thead><tr><th><button class="sort-button active" data-sort="captured_at">Data e ora <span>↓</span></button></th><th><button class="sort-button" data-sort="weight_kg">Peso <span>↕</span></button></th><th><button class="sort-button" data-sort="digits">Cifre <span>↕</span></button></th><th><button class="sort-button" data-sort="sequence">Sequenza <span>↕</span></button></th><th><button class="sort-button" data-sort="delivery">Invio <span>↕</span></button></th></tr></thead><tbody id="history-body"></tbody></table><div class="empty" id="history-empty">Nessuna pesata registrata</div></div>
@@ -128,6 +129,8 @@
             <label><span>ID dispositivo</span><input name="device_id" autocomplete="username" required></label>
             <label><span>Endpoint eventi</span><input name="backend_url" type="url" placeholder="https://gestionale/api/..."></label>
             <label><span>Token dispositivo</span><input name="backend_token" type="password" autocomplete="new-password" placeholder="Lascia vuoto per non modificarlo"></label>
+            <label><span>Segreto HMAC pesate</span><input name="event_hmac_secret" type="password" autocomplete="new-password" minlength="32" placeholder="Lascia vuoto per non modificarlo"></label>
+            <label><span>Token endpoint metriche</span><input name="metrics_token" type="password" autocomplete="new-password" minlength="24" placeholder="Lascia vuoto per non modificarlo"></label>
             <label><span>Certificato CA per HTTPS</span><textarea name="tls_ca_certificate" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
             <label><span>Certificato client mTLS</span><textarea name="tls_client_certificate" rows="4" placeholder="Opzionale"></textarea></label>
             <label><span>Chiave privata client mTLS</span><textarea name="tls_client_private_key" rows="4" placeholder="Lascia vuoto per non modificarla"></textarea></label>
@@ -138,6 +141,21 @@
             </div>
             <label class="check-row"><input name="heartbeat_watchdog_enabled" type="checkbox"><span><strong>Riavvio controllato su heartbeat assente</strong><small>Un solo riavvio fino al successivo heartbeat valido</small></span></label>
             <label><span>Errori heartbeat prima del riavvio</span><input name="heartbeat_failure_threshold" type="number" min="3" max="20"></label>
+            <div class="form-section"><p class="eyebrow">Configurazione remota</p></div>
+            <label class="check-row"><input name="config_sync_enabled" type="checkbox"><span><strong>Sincronizza dal gestionale</strong><small>Solo campi operativi in whitelist e versioni crescenti</small></span></label>
+            <label><span>Endpoint configurazione</span><input name="config_sync_url" type="url" placeholder="https://gestionale/api/.../config"></label>
+            <label><span>Intervallo sincronizzazione secondi</span><input name="config_sync_seconds" type="number" min="60" max="86400"></label>
+            <button class="button secondary" type="button" id="sync-config">Sincronizza adesso</button>
+            <div class="form-section"><p class="eyebrow">MQTT TLS opzionale</p></div>
+            <label class="check-row"><input name="mqtt_enabled" type="checkbox"><span><strong>Abilita MQTT</strong><small>Nessuna coda persistente: gli eventi non inviati non vengono riprovati</small></span></label>
+            <div class="ip-grid">
+              <label><span>Host broker</span><input name="mqtt_host" autocomplete="off" placeholder="mqtt.example.local"></label>
+              <label><span>Porta TLS</span><input name="mqtt_port" type="number" min="1" max="65535"></label>
+            </div>
+            <label><span>Utente MQTT</span><input name="mqtt_username" autocomplete="username"></label>
+            <label><span>Password MQTT</span><input name="mqtt_password" type="password" autocomplete="new-password" placeholder="Lascia vuoto per non modificarla"></label>
+            <label><span>Topic base</span><input name="mqtt_base_topic" placeholder="casklogic/laveggio"></label>
+            <label class="check-row"><input name="mqtt_commands_enabled" type="checkbox"><span><strong>Comandi MQTT controllati</strong><small>Solo display, diagnostica e sincronizzazione configurazione</small></span></label>
             <button class="button primary" type="submit">Salva integrazione</button>
           </form>
         </div>
@@ -176,7 +194,7 @@
           <div class="panel form-panel">
             <div class="panel-heading"><div><p class="eyebrow">Manutenzione</p><h2>Firmware e diagnostica</h2></div></div>
             <dl class="details" id="system-details"></dl>
-            <form id="ota-form" class="upload-box"><label><span>Aggiornamento firmware</span><input name="firmware" type="file" accept=".bin" required></label><button class="button secondary" type="submit">Carica firmware</button></form>
+            <form id="ota-form" class="upload-box"><label><span>Firmware firmato</span><input name="firmware" type="file" accept=".signed.bin" required><small>Accetta esclusivamente immagini ECDSA-P256 prodotte da CaskLogic</small></label><button class="button secondary" type="submit">Carica firmware</button></form>
             <div class="log-box" id="system-log">Caricamento diagnostica...</div>
             <a class="button secondary" href="/api/logs/export" download>Esporta log completi</a>
             <button class="button danger" type="button" id="restart-device">Riavvia dispositivo</button>
@@ -186,6 +204,22 @@
             <dl class="details" id="security-details"></dl>
           </div>
         </div>
+      </section>
+
+      <section class="view" id="view-diagnostics">
+        <div class="section-heading"><div><p class="eyebrow">Controlli operativi</p><h2>Autodiagnosi</h2></div><div class="heading-actions"><button class="button primary" id="run-diagnostics" type="button">Esegui test</button><a class="button secondary" href="/api/support-package" download>Scarica pacchetto ZIP</a></div></div>
+        <div class="diagnostic-grid" id="diagnostic-tests"></div>
+        <div class="section-heading"><div><p class="eyebrow">Ultime 24 ore</p><h2>Andamento dispositivo</h2></div><span class="state-pill neutral" id="current-availability">Corrente non disponibile</span></div>
+        <div class="chart-grid">
+          <article class="panel chart-panel"><header><strong>Tensione batteria</strong><span>mV</span></header><canvas id="chart-battery" height="190"></canvas></article>
+          <article class="panel chart-panel"><header><strong>Temperatura chip</strong><span>°C</span></header><canvas id="chart-temperature" height="190"></canvas></article>
+          <article class="panel chart-panel"><header><strong>Segnale Wi-Fi</strong><span>dBm</span></header><canvas id="chart-rssi" height="190"></canvas></article>
+          <article class="panel chart-panel"><header><strong>Memoria libera</strong><span>byte</span></header><canvas id="chart-heap" height="190"></canvas></article>
+        </div>
+        <div class="section-heading"><div><p class="eyebrow">Affidabilità</p><h2>Errori sensori</h2></div></div>
+        <div class="panel table-panel"><table><thead><tr><th>Sensore</th><th>Stato</th><th>Errori lettura</th><th>Magnete debole</th><th>Magnete forte</th><th>Transizioni errore</th><th>Ultimo errore</th></tr></thead><tbody id="sensor-errors-body"></tbody></table></div>
+        <div class="section-heading"><div><p class="eyebrow">Distribuzione</p><h2>Aggiornamenti firmware</h2></div></div>
+        <div class="panel table-panel"><table><thead><tr><th>Data e ora</th><th>Versione precedente</th><th>Destinazione</th><th>Versione attiva</th><th>Esito</th><th>Firma</th></tr></thead><tbody id="firmware-updates-body"></tbody></table><div class="empty" id="firmware-updates-empty">Nessun aggiornamento registrato</div></div>
       </section>
 
       <section class="view" id="view-casklogic">

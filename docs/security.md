@@ -33,8 +33,8 @@ essere sostituite dalla pagina Sistema prima dell'uso operativo.
 Digest evita di inviare la password in chiaro, ma non cifra il contenuto della
 sessione. Un portale HTTPS locale richiede la sostituzione del `WebServer`
 Arduino con `esp_https_server`, oltre alla gestione sicura del certificato e
-della chiave del dispositivo. Questa migrazione non e simulata dalla versione
-1.1.0. Riferimento ufficiale:
+della chiave del dispositivo. Questa migrazione non e implementata nella
+versione 1.2.0. Riferimento ufficiale:
 <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/protocols/esp_https_server.html>.
 
 ## Collegamento a CaskLogic
@@ -45,6 +45,22 @@ usa modalita TLS insicura. Sono supportati anche certificato e chiave client
 per mTLS; la chiave privata non viene mai restituita dall'API delle
 impostazioni. Il token Bearer resta disponibile come identita applicativa del
 dispositivo.
+
+Le pesate `scale.snapshot` possono inoltre essere firmate HMAC-SHA256. Il
+gestionale deve confrontare la firma in tempo costante e deduplicare
+`event_id`; HMAC autentica il payload ma non sostituisce TLS.
+
+MQTT e opzionale e usa lo stesso archivio CA e, se configurato, lo stesso
+certificato client mTLS. I soli comandi ammessi sono `display.set`,
+`config.sync` e `diagnostics.run`; ogni altro comando viene rifiutato. Il
+firmware non mantiene una coda MQTT persistente. La configurazione remota e
+accettata solo via HTTPS verificato, solo con una versione crescente e solo
+per i campi operativi in whitelist. Wi-Fi, credenziali amministrative, token,
+certificati e chiavi non sono modificabili dal gestionale.
+
+`GET /api/metrics` richiede un Bearer token dedicato quando configurato,
+altrimenti usa l'autenticazione del portale. Il pacchetto assistenza non include
+SSID, indirizzi IP, token, password, certificati o chiavi private.
 
 ## Watchdog heartbeat
 
@@ -60,9 +76,12 @@ ha ricevuto e accettato la richiesta.
 
 ## Segreti e aggiornamenti
 
-Token, password Wi-Fi, password amministrativa e chiave privata mTLS sono
+Token, segreto HMAC, password Wi-Fi, password amministrativa e chiave privata
+mTLS sono
 conservati nella NVS della scheda. La NVS non e cifrata in questa build: per
 protezione contro accesso fisico e lettura flash servono Secure Boot, Flash
-Encryption e provisioning delle chiavi in produzione. Prima dell'esercizio
-vanno inoltre verificati OTA firmato, procedure di recupero e rotazione dei
-certificati.
+Encryption e provisioning delle chiavi in produzione. L'OTA applicativo
+richiede una firma ECDSA-P256 ed esegue la validazione del nuovo avvio con
+rollback della partizione, ma questo non equivale al Secure Boot della ROM.
+Secure Boot e Flash Encryption richiedono un provisioning fisico irreversibile
+da pianificare sulla scheda reale. Vedere [`firmware-signing.md`](firmware-signing.md).

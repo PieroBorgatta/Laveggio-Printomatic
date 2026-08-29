@@ -17,10 +17,23 @@ struct DeviceConfig {
   String dns = "192.168.1.1";
   String backendUrl;
   String backendToken;
+  String eventHmacSecret;
+  String metricsToken;
   String tlsCaCertificate;
   String tlsClientCertificate;
   String tlsClientPrivateKey;
   String notificationUrl;
+  bool configSyncEnabled = false;
+  String configSyncUrl;
+  uint32_t configSyncSeconds = 900;
+  uint32_t remoteConfigVersion = 0;
+  bool mqttEnabled = false;
+  String mqttHost;
+  uint16_t mqttPort = 8883;
+  String mqttUsername;
+  String mqttPassword;
+  String mqttBaseTopic = "casklogic/laveggio";
+  bool mqttCommandsEnabled = false;
   String ntpServer = "pool.ntp.org";
   String timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
   String adminUser = "info@casklogic.com";
@@ -53,6 +66,7 @@ class ConfigStore {
   DeviceConfig &mutableConfig() { return config_; }
   bool saveSettings();
   bool saveHeartbeatRestartSuppressed();
+  bool saveRemoteConfigVersion();
   bool saveCalibration(uint8_t channel);
   bool clearCalibration(uint8_t channel);
   bool isProvisioned() const { return !config_.wifiSsid.isEmpty(); }

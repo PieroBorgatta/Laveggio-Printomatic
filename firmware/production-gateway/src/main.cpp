@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: CC-BY-4.0
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <DNSServer.h>
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
 #include <Preferences.h>
+#include <PubSubClient.h>
 #include <SD.h>
 #include <SPI.h>
 #include <Update.h>
@@ -14,18 +16,26 @@
 #include <WiFiClientSecure.h>
 #include <Wire.h>
 #include <esp_system.h>
+#include <esp_ota_ops.h>
+#include <mbedtls/md.h>
 #include <time.h>
 #include <algorithm>
 #include <vector>
 
 #include "DeviceConfig.h"
 #include "DisplayDriver.h"
+#include "OtaPublicKey.h"
 #include "ScaleCore.h"
+#include "StoredZip.h"
 #include "WebAssets.h"
+
+extern "C" bool verifyRollbackLater() {
+  return true;
+}
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.1.0";
+constexpr char kFirmwareVersion[] = "1.2.0";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdCs = 4;
 constexpr uint8_t kI2cSda = 1;
@@ -38,6 +48,9 @@ constexpr uint32_t kHealthIntervalMs = 250;
 constexpr uint32_t kReconnectIntervalMs = 15000;
 constexpr uint32_t kRescueApShutdownDelayMs = 120000;
 constexpr uint32_t kDiagnosticLogIntervalMs = 60000;
+constexpr uint32_t kSdCheckIntervalMs = 900000;
+constexpr uint32_t kMqttReconnectIntervalMs = 15000;
+constexpr uint32_t kTimeSyncRetryIntervalMs = 15000;
 constexpr uint32_t kRetentionIntervalMs = 86400000UL;
 constexpr uint32_t kAuthBlockMs = 60000;
 constexpr uint8_t kAuthFailureLimit = 5;
@@ -50,18 +63,42 @@ struct OutboundMessage {
   char caCertificate[3072];
   char clientCertificate[3072];
   char clientPrivateKey[3072];
-  char body[1152];
+  char body[1536];
   bool heartbeat;
+};
+
+struct SensorErrorCounters {
+  uint32_t readFailures = 0;
+  uint32_t missingSamples = 0;
+  uint32_t weakMagnetSamples = 0;
+  uint32_t strongMagnetSamples = 0;
+  uint32_t unhealthyTransitions = 0;
+  bool stateInitialized = false;
+  bool previouslyHealthy = false;
+  String lastErrorAt;
+};
+
+struct SdHealthState {
+  bool lastCheckOk = false;
+  uint32_t checks = 0;
+  uint32_t failures = 0;
+  uint32_t malformedRecords = 0;
+  String lastCheckedAt;
+  String lastError;
 };
 
 ConfigStore configStore;
 DisplayDriver display;
 WebServer webServer(80);
 DNSServer dnsServer;
+WiFiClientSecure mqttTlsClient;
+PubSubClient mqttClient(mqttTlsClient);
 laveggio::SensorReading sensorReadings[laveggio::kChannelCount];
 laveggio::StabilityTracker stabilityTracker;
 laveggio::WeightSnapshot currentSnapshot;
 QueueHandle_t outboundQueue = nullptr;
+SensorErrorCounters sensorErrors[laveggio::kChannelCount];
+SdHealthState sdHealth;
 
 String deviceSuffix;
 String bootId;
@@ -71,6 +108,10 @@ bool accessPointActive = false;
 bool displayOn = false;
 bool integrationLastOk = false;
 bool otaSucceeded = false;
+bool otaSignatureVerified = false;
+bool timeSynchronized = false;
+bool mqttLastConnected = false;
+bool configSyncLastOk = false;
 bool externalPowerPresent = true;
 bool previousExternalPowerPresent = true;
 volatile int integrationLastCode = 0;
@@ -90,12 +131,27 @@ uint32_t lastScanCounterMs = 0;
 uint32_t lastReconnectMs = 0;
 uint32_t lastHeartbeatMs = 0;
 uint32_t lastDiagnosticLogMs = 0;
+uint32_t lastSdCheckMs = 0;
+uint32_t lastMqttReconnectMs = 0;
+uint32_t lastTimeSyncAttemptMs = 0;
+uint32_t lastConfigSyncMs = 0;
 uint32_t lastRetentionMs = 0;
 uint32_t stationConnectedSinceMs = 0;
 uint32_t scheduledRestartMs = 0;
 uint32_t authBlockedUntilMs = 0;
 String csrfToken;
 String lastHeartbeatAckAt;
+String lastTimeSyncAt;
+String lastConfigSyncAt;
+String lastConfigSyncError;
+String otaTargetLabel;
+String otaPreviousVersion;
+String otaErrorDetail;
+UpdaterECDSAVerifier otaVerifier(PUBLIC_KEY, PUBLIC_KEY_LEN, HASH_SHA256);
+bool configSyncAttemptedThisBoot = false;
+
+void logSystem(const String &level, const String &event, const String &detail);
+bool syncRemoteConfiguration();
 
 String jsonEscape(const String &value) {
   String escaped;
@@ -141,6 +197,46 @@ String timestampIso(time_t epoch) {
   char buffer[32];
   strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S%z", &timeInfo);
   return buffer;
+}
+
+void requestTimeSynchronization() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  const DeviceConfig &config = configStore.get();
+  configTzTime(config.timezone.c_str(), config.ntpServer.c_str());
+  lastTimeSyncAttemptMs = millis();
+}
+
+void pollTimeSynchronization(uint32_t now) {
+  const bool valid = time(nullptr) >= 1700000000;
+  if (valid && !timeSynchronized) {
+    timeSynchronized = true;
+    lastTimeSyncAt = timestampIso();
+    logSystem("info", "time_synchronized", lastTimeSyncAt);
+  }
+  if (!valid && WiFi.status() == WL_CONNECTED &&
+      now - lastTimeSyncAttemptMs >= kTimeSyncRetryIntervalMs) {
+    requestTimeSynchronization();
+  }
+}
+
+String hmacSha256Hex(const String &secret, const String &payload) {
+  if (secret.isEmpty()) return "";
+  unsigned char digest[32] = {0};
+  const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  if (info == nullptr || mbedtls_md_hmac(
+        info,
+        reinterpret_cast<const unsigned char *>(secret.c_str()),
+        secret.length(),
+        reinterpret_cast<const unsigned char *>(payload.c_str()),
+        payload.length(),
+        digest
+      ) != 0) return "";
+  char hex[65];
+  for (uint8_t index = 0; index < sizeof(digest); ++index) {
+    snprintf(hex + index * 2, 3, "%02x", digest[index]);
+  }
+  hex[64] = '\0';
+  return hex;
 }
 
 uint8_t estimatedBatteryPercent() {
@@ -289,6 +385,7 @@ void logSystem(const String &level, const String &event, const String &detail = 
   String line;
   line.reserve(220 + detail.length());
   line += "{\"captured_at\":" + quoted(timestampIso());
+  line += ",\"time_synchronized\":" + boolJson(timeSynchronized);
   line += ",\"uptime_ms\":" + String(millis());
   line += ",\"boot_id\":" + quoted(bootId);
   line += ",\"level\":" + quoted(level);
@@ -307,12 +404,17 @@ void recordSensorDiagnostics() {
   String line;
   line.reserve(760);
   line += "{\"captured_at\":" + quoted(timestampIso());
+  line += ",\"time_synchronized\":" + boolJson(timeSynchronized);
   line += ",\"uptime_ms\":" + String(millis());
   line += ",\"boot_id\":" + quoted(bootId);
   line += ",\"event\":\"sensor_diagnostics\"";
   line += ",\"scan_rate_hz\":" + String(scansPerSecond);
   line += ",\"external_power\":" + boolJson(externalPowerPresent);
   line += ",\"battery_voltage_mv\":" + String(batteryVoltageMv);
+  line += ",\"current_ma\":null";
+  line += ",\"chip_temperature_c\":" + String(temperatureRead(), 1);
+  line += ",\"wifi_rssi\":" + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0);
+  line += ",\"free_heap\":" + String(ESP.getFreeHeap());
   line += ",\"weight_kg\":" + String(currentSnapshot.weightKg);
   line += ",\"valid\":" + boolJson(currentSnapshot.valid);
   line += ",\"stable\":" + boolJson(currentSnapshot.stable);
@@ -325,7 +427,11 @@ void recordSensorDiagnostics() {
     line += ",\"raw\":" + String(reading.raw);
     line += ",\"status\":" + String(reading.status);
     line += ",\"agc\":" + String(reading.agc);
-    line += ",\"magnitude\":" + String(reading.magnitude) + "}";
+    line += ",\"magnitude\":" + String(reading.magnitude);
+    line += ",\"read_failures\":" + String(sensorErrors[channel].readFailures);
+    line += ",\"magnet_errors\":" + String(
+      sensorErrors[channel].weakMagnetSamples + sensorErrors[channel].strongMagnetSamples
+    ) + "}";
   }
   line += "]}";
   appendLine(
@@ -351,6 +457,92 @@ String readLatestLogTail(size_t maxBytes) {
   const std::vector<String> paths = listNdjsonFiles("/logs", "system");
   if (paths.empty()) return "Nessun log disponibile.";
   return readTailText(paths.back(), maxBytes);
+}
+
+uint32_t countMalformedNdjsonTail(const String &path, size_t maxBytes = 32768) {
+  if (!sdReady || !SD.exists(path)) return 0;
+  File file = SD.open(path, FILE_READ);
+  if (!file) return 1;
+  const size_t start = file.size() > maxBytes ? file.size() - maxBytes : 0;
+  file.seek(start);
+  if (start > 0) file.readStringUntil('\n');
+  uint32_t malformed = 0;
+  while (file.available()) {
+    String line = file.readStringUntil('\n');
+    line.trim();
+    if (!line.isEmpty() && !(line.startsWith("{") && line.endsWith("}"))) ++malformed;
+  }
+  file.close();
+  return malformed;
+}
+
+bool runSdHealthCheck() {
+  ++sdHealth.checks;
+  sdHealth.lastCheckedAt = timestampIso();
+  sdHealth.lastError = "";
+  sdHealth.malformedRecords = 0;
+  if (!sdReady) {
+    ++sdHealth.failures;
+    sdHealth.lastCheckOk = false;
+    sdHealth.lastError = "MicroSD non montata";
+    return false;
+  }
+  ensureDirectoryTree("/diagnostics");
+  const String testPath = "/diagnostics/.sd-health-" + bootId + ".tmp";
+  const String expected = "LAVEGGIO-SD-CHECK-" + String(esp_random(), HEX);
+  File output = SD.open(testPath, FILE_WRITE);
+  if (!output || output.print(expected) != expected.length()) {
+    if (output) output.close();
+    ++sdHealth.failures;
+    sdHealth.lastCheckOk = false;
+    sdHealth.lastError = "Scrittura di controllo fallita";
+    return false;
+  }
+  output.flush();
+  output.close();
+  File input = SD.open(testPath, FILE_READ);
+  const String actual = input ? input.readString() : "";
+  if (input) input.close();
+  SD.remove(testPath);
+  if (actual != expected) {
+    ++sdHealth.failures;
+    sdHealth.lastCheckOk = false;
+    sdHealth.lastError = "Lettura di controllo incoerente";
+    return false;
+  }
+
+  const std::vector<String> logPaths = listNdjsonFiles("/logs", "system");
+  const std::vector<String> historyPaths = listNdjsonFiles("/weights", "history");
+  if (!logPaths.empty()) sdHealth.malformedRecords += countMalformedNdjsonTail(logPaths.back());
+  if (!historyPaths.empty()) sdHealth.malformedRecords += countMalformedNdjsonTail(historyPaths.back());
+  const uint64_t total = SD.totalBytes();
+  const uint64_t free = total > SD.usedBytes() ? total - SD.usedBytes() : 0;
+  if (sdHealth.malformedRecords > 0) sdHealth.lastError = "Record NDJSON malformati=" + String(sdHealth.malformedRecords);
+  if (total > 0 && (free < 128ULL * 1024ULL * 1024ULL || free * 100ULL / total < 5ULL)) {
+    if (!sdHealth.lastError.isEmpty()) sdHealth.lastError += "; ";
+    sdHealth.lastError += "Spazio libero insufficiente";
+  }
+  sdHealth.lastCheckOk = sdHealth.lastError.isEmpty();
+  if (!sdHealth.lastCheckOk) {
+    ++sdHealth.failures;
+    logSystem("warning", "sd_health_warning", sdHealth.lastError);
+  }
+  return sdHealth.lastCheckOk;
+}
+
+void recordFirmwareUpdate(const String &outcome, const String &target, const String &detail = "") {
+  if (!sdReady) return;
+  ensureDirectoryTree("/updates");
+  String line = "{\"captured_at\":" + quoted(timestampIso());
+  line += ",\"boot_id\":" + quoted(bootId);
+  line += ",\"previous_version\":" + quoted(otaPreviousVersion.isEmpty() ? kFirmwareVersion : otaPreviousVersion);
+  line += ",\"target\":" + quoted(target);
+  line += ",\"running_version\":" + quoted(kFirmwareVersion);
+  line += ",\"outcome\":" + quoted(outcome);
+  line += ",\"signature_verified\":" + boolJson(otaSignatureVerified);
+  if (!detail.isEmpty()) line += ",\"detail\":" + quoted(detail);
+  line += "}";
+  appendLine("/updates/registry.ndjson", line, 4UL * 1024UL * 1024UL);
 }
 
 void pruneExpiredArchives() {
@@ -410,12 +602,32 @@ void scanSensors() {
   for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
     if (!selectMuxChannel(channel)) {
       sensorReadings[channel].present = false;
+      ++sensorErrors[channel].readFailures;
+      if (healthDue) {
+        ++sensorErrors[channel].missingSamples;
+        sensorErrors[channel].lastErrorAt = timestampIso();
+        if (sensorErrors[channel].stateInitialized && sensorErrors[channel].previouslyHealthy) {
+          ++sensorErrors[channel].unhealthyTransitions;
+        }
+        sensorErrors[channel].stateInitialized = true;
+        sensorErrors[channel].previouslyHealthy = false;
+      }
       continue;
     }
     delayMicroseconds(450);
     uint8_t angle[2] = {0, 0};
     if (!readAs5600(0x0C, angle, 2)) {
       sensorReadings[channel].present = false;
+      ++sensorErrors[channel].readFailures;
+      if (healthDue) {
+        ++sensorErrors[channel].missingSamples;
+        sensorErrors[channel].lastErrorAt = timestampIso();
+        if (sensorErrors[channel].stateInitialized && sensorErrors[channel].previouslyHealthy) {
+          ++sensorErrors[channel].unhealthyTransitions;
+        }
+        sensorErrors[channel].stateInitialized = true;
+        sensorErrors[channel].previouslyHealthy = false;
+      }
       continue;
     }
     laveggio::SensorReading &reading = sensorReadings[channel];
@@ -431,6 +643,16 @@ void scanSensors() {
         reading.magnitude =
           ((static_cast<uint16_t>(magnitude[0]) << 8) | magnitude[1]) & 0x0FFF;
       }
+      const bool healthy = reading.healthy();
+      SensorErrorCounters &errors = sensorErrors[channel];
+      if (reading.magnetWeak()) ++errors.weakMagnetSamples;
+      if (reading.magnetStrong()) ++errors.strongMagnetSamples;
+      if (!healthy) errors.lastErrorAt = timestampIso();
+      if (errors.stateInitialized && errors.previouslyHealthy && !healthy) {
+        ++errors.unhealthyTransitions;
+      }
+      errors.stateInitialized = true;
+      errors.previouslyHealthy = healthy;
     }
   }
   if (healthDue) lastHealthReadMs = now;
@@ -444,14 +666,28 @@ void scanSensors() {
 
 String buildSnapshotJson(const char *eventType, bool includeDelivery) {
   const DeviceConfig &config = configStore.get();
+  const String capturedAt = timestampIso();
+  const String eventId = config.deviceId + ":" + bootId + ":" + String(sequenceNumber);
+  String digitsCanonical;
+  for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
+    if (channel) digitsCanonical += '.';
+    digitsCanonical += String(currentSnapshot.digits[channel]);
+  }
+  const String signatureInput = eventId + "\n" + capturedAt + "\n" +
+    String(currentSnapshot.weightKg) + "\n" + digitsCanonical;
+  const String signature = strcmp(eventType, "scale.snapshot") == 0
+    ? hmacSha256Hex(config.eventHmacSecret, signatureInput)
+    : "";
   String json;
-  json.reserve(1024);
+  json.reserve(1280);
   json += "{\"type\":" + quoted(eventType);
   json += ",\"schema_version\":1";
+  json += ",\"event_id\":" + quoted(eventId);
   json += ",\"device_id\":" + quoted(config.deviceId);
   json += ",\"boot_id\":" + quoted(bootId);
   json += ",\"sequence\":" + String(sequenceNumber);
-  json += ",\"captured_at\":" + quoted(timestampIso());
+  json += ",\"captured_at\":" + quoted(capturedAt);
+  json += ",\"time_synchronized\":" + boolJson(timeSynchronized);
   json += ",\"captured_ms\":" + String(millis());
   json += ",\"digits\":[";
   for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
@@ -479,8 +715,10 @@ String buildSnapshotJson(const char *eventType, bool includeDelivery) {
     json += ",\"magnitude\":" + String(reading.magnitude) + "}";
   }
   json += "]";
+  json += ",\"signature_alg\":" + (signature.isEmpty() ? String("null") : quoted("HMAC-SHA256"));
+  json += ",\"signature\":" + (signature.isEmpty() ? String("null") : quoted(signature));
   if (includeDelivery) {
-    const String delivery = config.backendUrl.isEmpty() ? "local" : "queued";
+    const String delivery = config.backendUrl.isEmpty() && !config.mqttEnabled ? "local" : "requested";
     json += ",\"delivery\":" + quoted(delivery);
   }
   json += "}";
@@ -557,10 +795,205 @@ void integrationTask(void *) {
   }
 }
 
+String mqttTopic(const char *suffix) {
+  String base = configStore.get().mqttBaseTopic;
+  while (base.endsWith("/")) base.remove(base.length() - 1);
+  return base + "/" + configStore.get().deviceId + "/" + suffix;
+}
+
+void publishMqttCommandAck(const String &commandId, const String &command, bool ok, const String &detail) {
+  if (!mqttClient.connected()) return;
+  String body = "{\"command_id\":" + quoted(commandId);
+  body += ",\"command\":" + quoted(command);
+  body += ",\"ok\":" + boolJson(ok);
+  body += ",\"detail\":" + quoted(detail);
+  body += ",\"captured_at\":" + quoted(timestampIso()) + "}";
+  mqttClient.publish(mqttTopic("command-acks").c_str(), body.c_str(), false);
+}
+
+void mqttMessageReceived(char *, byte *payload, unsigned int length) {
+  if (!configStore.get().mqttCommandsEnabled || length == 0 || length > 1024) return;
+  JsonDocument document;
+  if (deserializeJson(document, payload, length) != DeserializationError::Ok) return;
+  const String commandId = document["command_id"] | "";
+  const String command = document["command"] | "";
+  if (commandId.isEmpty() || command.isEmpty()) return;
+
+  if (command == "display.set") {
+    if (!document["enabled"].is<bool>()) {
+      publishMqttCommandAck(commandId, command, false, "Parametro enabled mancante");
+      return;
+    }
+    displayOn = document["enabled"].as<bool>();
+    display.setEnabled(displayOn);
+    logSystem("info", "mqtt_display_command", displayOn ? "enabled" : "disabled");
+    publishMqttCommandAck(commandId, command, true, "Display aggiornato");
+    return;
+  }
+  if (command == "config.sync") {
+    const bool ok = syncRemoteConfiguration();
+    publishMqttCommandAck(commandId, command, ok, ok ? "Configurazione sincronizzata" : lastConfigSyncError);
+    return;
+  }
+  if (command == "diagnostics.run") {
+    lastSdCheckMs = 0;
+    logSystem("info", "mqtt_diagnostics_requested", commandId);
+    publishMqttCommandAck(commandId, command, true, "Diagnostica pianificata");
+    return;
+  }
+  publishMqttCommandAck(commandId, command, false, "Comando non consentito");
+}
+
+void maintainMqtt(uint32_t now) {
+  const DeviceConfig &config = configStore.get();
+  if (!config.mqttEnabled || config.mqttHost.isEmpty()) {
+    if (mqttClient.connected()) mqttClient.disconnect();
+    mqttLastConnected = false;
+    return;
+  }
+  if (mqttClient.connected()) {
+    mqttLastConnected = true;
+    mqttClient.loop();
+    return;
+  }
+  mqttLastConnected = false;
+  if (WiFi.status() != WL_CONNECTED || config.tlsCaCertificate.isEmpty() ||
+      now - lastMqttReconnectMs < kMqttReconnectIntervalMs) return;
+  lastMqttReconnectMs = now;
+  mqttTlsClient.setCACert(config.tlsCaCertificate.c_str());
+  if (!config.tlsClientCertificate.isEmpty() && !config.tlsClientPrivateKey.isEmpty()) {
+    mqttTlsClient.setCertificate(config.tlsClientCertificate.c_str());
+    mqttTlsClient.setPrivateKey(config.tlsClientPrivateKey.c_str());
+  }
+  mqttClient.setServer(config.mqttHost.c_str(), config.mqttPort);
+  const String willTopic = mqttTopic("availability");
+  const bool connected = mqttClient.connect(
+    config.deviceId.c_str(),
+    config.mqttUsername.c_str(),
+    config.mqttPassword.c_str(),
+    willTopic.c_str(),
+    1,
+    true,
+    "offline"
+  );
+  if (!connected) {
+    logSystem("warning", "mqtt_connect_failed", "state=" + String(mqttClient.state()));
+    return;
+  }
+  mqttLastConnected = true;
+  mqttClient.publish(willTopic.c_str(), "online", true);
+  mqttClient.publish(mqttTopic("status").c_str(), buildSnapshotJson("scale.heartbeat", false).c_str(), true);
+  if (config.mqttCommandsEnabled) mqttClient.subscribe(mqttTopic("commands").c_str(), 1);
+  logSystem("info", "mqtt_connected", config.mqttHost + ":" + String(config.mqttPort));
+}
+
+bool syncRemoteConfiguration() {
+  DeviceConfig &config = configStore.mutableConfig();
+  configSyncAttemptedThisBoot = true;
+  lastConfigSyncMs = millis();
+  lastConfigSyncError = "";
+  if (!config.configSyncEnabled || config.configSyncUrl.isEmpty()) {
+    lastConfigSyncError = "Sincronizzazione non configurata";
+    return false;
+  }
+  if (WiFi.status() != WL_CONNECTED || !timeSynchronized) {
+    lastConfigSyncError = "Rete o orario non disponibili";
+    return false;
+  }
+  if (!config.configSyncUrl.startsWith("https://") || config.tlsCaCertificate.isEmpty()) {
+    lastConfigSyncError = "HTTPS verificato obbligatorio";
+    return false;
+  }
+
+  WiFiClientSecure client;
+  client.setCACert(config.tlsCaCertificate.c_str());
+  if (!config.tlsClientCertificate.isEmpty() && !config.tlsClientPrivateKey.isEmpty()) {
+    client.setCertificate(config.tlsClientCertificate.c_str());
+    client.setPrivateKey(config.tlsClientPrivateKey.c_str());
+  }
+  HTTPClient http;
+  if (!http.begin(client, config.configSyncUrl)) {
+    lastConfigSyncError = "Impossibile inizializzare HTTPS";
+    return false;
+  }
+  http.setTimeout(3500);
+  if (!config.backendToken.isEmpty()) http.addHeader("Authorization", "Bearer " + config.backendToken);
+  http.addHeader("X-Device-Id", config.deviceId);
+  http.addHeader("X-Config-Version", String(config.remoteConfigVersion));
+  const int code = http.GET();
+  if (code == 304) {
+    configSyncLastOk = true;
+    lastConfigSyncAt = timestampIso();
+    http.end();
+    return true;
+  }
+  if (code != 200) {
+    lastConfigSyncError = "HTTP " + String(code);
+    configSyncLastOk = false;
+    http.end();
+    logSystem("warning", "config_sync_failed", lastConfigSyncError);
+    return false;
+  }
+  JsonDocument document;
+  const DeserializationError error = deserializeJson(document, http.getStream());
+  http.end();
+  if (error) {
+    lastConfigSyncError = "JSON non valido";
+    configSyncLastOk = false;
+    return false;
+  }
+  const uint32_t version = document["version"] | 0;
+  if (version <= config.remoteConfigVersion) {
+    lastConfigSyncError = "Versione non crescente";
+    configSyncLastOk = false;
+    return false;
+  }
+
+  if (document["stable_ms"].is<uint32_t>()) config.stableWindowMs = constrain(document["stable_ms"].as<uint32_t>(), 100UL, 5000UL);
+  if (document["display_default_on"].is<bool>()) config.displayDefaultOn = document["display_default_on"].as<bool>();
+  if (document["heartbeat_seconds"].is<uint32_t>()) config.heartbeatSeconds = constrain(document["heartbeat_seconds"].as<uint32_t>(), 5UL, 3600UL);
+  if (document["heartbeat_watchdog_enabled"].is<bool>()) config.heartbeatWatchdogEnabled = document["heartbeat_watchdog_enabled"].as<bool>();
+  if (document["heartbeat_failure_threshold"].is<uint8_t>()) config.heartbeatFailureThreshold = constrain(document["heartbeat_failure_threshold"].as<uint8_t>(), 3, 20);
+  if (document["history_enabled"].is<bool>()) config.historyEnabled = document["history_enabled"].as<bool>();
+  if (document["history_keep_forever"].is<bool>()) config.historyKeepForever = document["history_keep_forever"].as<bool>();
+  if (document["history_retention_days"].is<uint16_t>()) config.historyRetentionDays = constrain(document["history_retention_days"].as<uint16_t>(), 1, 3650);
+
+  JsonArray calibrations = document["calibrations"].as<JsonArray>();
+  for (JsonObject remote : calibrations) {
+    const int channel = remote["channel"] | -1;
+    if (channel < 0 || channel >= laveggio::kChannelCount) continue;
+    laveggio::ChannelCalibration &calibration = config.calibrations[channel];
+    if (remote["multiplier_kg"].is<uint32_t>()) calibration.multiplierKg = constrain(remote["multiplier_kg"].as<uint32_t>(), 1UL, 100000UL);
+    if (remote["tolerance"].is<uint16_t>()) calibration.tolerance = constrain(remote["tolerance"].as<uint16_t>(), 10, 1024);
+    if (remote["hysteresis"].is<uint16_t>()) calibration.hysteresis = constrain(remote["hysteresis"].as<uint16_t>(), 0, 512);
+    JsonArray points = remote["points"].as<JsonArray>();
+    for (JsonObject point : points) {
+      const int position = point["position"] | -1;
+      if (position < 0 || position >= laveggio::kPositionCount) continue;
+      if (point["enabled"].is<bool>()) calibration.points[position].enabled = point["enabled"].as<bool>();
+      if (point["raw"].is<uint16_t>()) calibration.points[position].raw = constrain(point["raw"].as<uint16_t>(), 0, 4095);
+    }
+    configStore.saveCalibration(channel);
+  }
+  config.remoteConfigVersion = version;
+  configStore.saveSettings();
+  stabilityTracker.setStableWindow(config.stableWindowMs);
+  configSyncLastOk = true;
+  lastConfigSyncAt = timestampIso();
+  logSystem("info", "config_sync_applied", "version=" + String(version));
+  return true;
+}
+
 void recordWeightEvent() {
   ++sequenceNumber;
-  const String record = buildSnapshotJson("scale.snapshot", true);
   const DeviceConfig &config = configStore.get();
+  const String outboundRecord = buildSnapshotJson("scale.snapshot", false);
+  String record = outboundRecord;
+  if (record.endsWith("}")) {
+    record.remove(record.length() - 1);
+    const String delivery = config.backendUrl.isEmpty() && !config.mqttEnabled ? "local" : "requested";
+    record += ",\"delivery\":" + quoted(delivery) + "}";
+  }
   if (config.historyEnabled) {
     appendLine(
       weeklyLogPath("/weights", "history"),
@@ -568,18 +1001,26 @@ void recordWeightEvent() {
       config.historyFileMaxMb * 1024UL * 1024UL
     );
   }
-  queueOutbound(configStore.get().backendUrl, configStore.get().backendToken, buildSnapshotJson("scale.snapshot", false));
+  queueOutbound(config.backendUrl, config.backendToken, outboundRecord);
+  if (config.mqttEnabled && mqttClient.connected()) {
+    mqttClient.publish(mqttTopic("weights").c_str(), outboundRecord.c_str(), false);
+  }
 }
 
 void sendHeartbeat() {
-  if (configStore.get().backendUrl.isEmpty()) return;
+  const DeviceConfig &config = configStore.get();
+  if (config.backendUrl.isEmpty() && !config.mqttEnabled) return;
   ++sequenceNumber;
-  if (!queueOutbound(
-    configStore.get().backendUrl,
-    configStore.get().backendToken,
-    buildSnapshotJson("scale.heartbeat", false),
+  const String heartbeat = buildSnapshotJson("scale.heartbeat", false);
+  if (!config.backendUrl.isEmpty() && !queueOutbound(
+    config.backendUrl,
+    config.backendToken,
+    heartbeat,
     true
   )) reportHeartbeatResult(false, -3);
+  if (config.mqttEnabled && mqttClient.connected()) {
+    mqttClient.publish(mqttTopic("status").c_str(), heartbeat.c_str(), true);
+  }
 }
 
 void processHeartbeatResult() {
@@ -658,7 +1099,7 @@ void maintainRescueAccessPoint(uint32_t now) {
   if (stationConnectedSinceMs == 0) {
     stationConnectedSinceMs = now;
     const DeviceConfig &config = configStore.get();
-    configTzTime(config.timezone.c_str(), config.ntpServer.c_str());
+    requestTimeSynchronization();
     logSystem("info", "wifi_reconnected", WiFi.localIP().toString());
   }
   if (!accessPointActive || now - stationConnectedSinceMs < kRescueApShutdownDelayMs) return;
@@ -687,7 +1128,7 @@ void connectNetwork() {
   while (WiFi.status() != WL_CONNECTED && millis() - startedAt < 12000) delay(100);
   if (WiFi.status() == WL_CONNECTED) {
     stationConnectedSinceMs = millis();
-    configTzTime(config.timezone.c_str(), config.ntpServer.c_str());
+    requestTimeSynchronization();
     if (MDNS.begin(config.hostname.c_str())) MDNS.addService("http", "tcp", 80);
     logSystem("info", "wifi_connected", WiFi.localIP().toString());
   } else {
@@ -747,6 +1188,49 @@ bool authorized() {
   return false;
 }
 
+bool authorizedMetrics() {
+  const String token = configStore.get().metricsToken;
+  if (!token.isEmpty()) {
+    const String authorization = webServer.header("Authorization");
+    if (authorization.startsWith("Bearer ") && constantTimeEqual(authorization.substring(7), token)) return true;
+    sendSecurityHeaders();
+    webServer.sendHeader("WWW-Authenticate", "Bearer realm=\"Laveggio metrics\"");
+    webServer.send(401, "text/plain; charset=utf-8", "Token metriche non valido\n");
+    return false;
+  }
+  return authorized();
+}
+
+String buildPrometheusMetrics() {
+  const DeviceConfig &config = configStore.get();
+  String metrics;
+  metrics.reserve(2600);
+  metrics += "# HELP laveggio_up Device firmware is running.\n# TYPE laveggio_up gauge\nlaveggio_up 1\n";
+  metrics += "# TYPE laveggio_uptime_seconds counter\nlaveggio_uptime_seconds " + String(millis() / 1000) + "\n";
+  metrics += "# TYPE laveggio_free_heap_bytes gauge\nlaveggio_free_heap_bytes " + String(ESP.getFreeHeap()) + "\n";
+  metrics += "# TYPE laveggio_wifi_connected gauge\nlaveggio_wifi_connected " + String(WiFi.status() == WL_CONNECTED ? 1 : 0) + "\n";
+  metrics += "# TYPE laveggio_wifi_rssi_dbm gauge\nlaveggio_wifi_rssi_dbm " + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + "\n";
+  metrics += "# TYPE laveggio_time_synchronized gauge\nlaveggio_time_synchronized " + String(timeSynchronized ? 1 : 0) + "\n";
+  metrics += "# TYPE laveggio_sd_ready gauge\nlaveggio_sd_ready " + String(sdReady ? 1 : 0) + "\n";
+  metrics += "# TYPE laveggio_sd_health gauge\nlaveggio_sd_health " + String(sdHealth.lastCheckOk ? 1 : 0) + "\n";
+  metrics += "# TYPE laveggio_sd_free_bytes gauge\nlaveggio_sd_free_bytes " + String(sdReady ? SD.totalBytes() - SD.usedBytes() : 0) + "\n";
+  metrics += "# TYPE laveggio_battery_voltage_millivolts gauge\nlaveggio_battery_voltage_millivolts " + String(batteryVoltageMv) + "\n";
+  metrics += "# TYPE laveggio_chip_temperature_celsius gauge\nlaveggio_chip_temperature_celsius " + String(temperatureRead(), 1) + "\n";
+  metrics += "# TYPE laveggio_integration_last_ok gauge\nlaveggio_integration_last_ok " + String(integrationLastOk ? 1 : 0) + "\n";
+  metrics += "# TYPE laveggio_mqtt_connected gauge\nlaveggio_mqtt_connected " + String(mqttClient.connected() ? 1 : 0) + "\n";
+  metrics += "# TYPE laveggio_weight_kg gauge\nlaveggio_weight_kg " + String(currentSnapshot.weightKg) + "\n";
+  for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
+    const String label = "{channel=\"" + String(channel) + "\"}";
+    metrics += "laveggio_sensor_healthy" + label + " " + String(sensorReadings[channel].healthy() ? 1 : 0) + "\n";
+    metrics += "laveggio_sensor_read_failures_total" + label + " " + String(sensorErrors[channel].readFailures) + "\n";
+    metrics += "laveggio_sensor_magnet_errors_total" + label + " " + String(
+      sensorErrors[channel].weakMagnetSamples + sensorErrors[channel].strongMagnetSamples
+    ) + "\n";
+  }
+  metrics += "# laveggio_device_id " + config.deviceId + "\n";
+  return metrics;
+}
+
 void sendJson(const String &json, int status = 200) {
   sendSecurityHeaders();
   webServer.sendHeader("Cache-Control", "no-store");
@@ -767,6 +1251,8 @@ String buildStatusJson() {
   json += ",\"free_heap\":" + String(ESP.getFreeHeap());
   json += ",\"reset_reason\":" + quoted(resetReasonLabel());
   json += ",\"device_time\":" + quoted(timestampIso());
+  json += ",\"time_synchronized\":" + boolJson(timeSynchronized);
+  json += ",\"time_last_sync_at\":" + quoted(lastTimeSyncAt);
   const time_t nowEpoch = time(nullptr);
   json += ",\"booted_at\":" + quoted(timestampIso(nowEpoch - millis() / 1000));
   json += ",\"display_on\":" + boolJson(displayOn);
@@ -786,10 +1272,23 @@ String buildStatusJson() {
   json += ",\"heartbeat_last_ack_at\":" + quoted(lastHeartbeatAckAt);
   json += ",\"heartbeat_failures\":" + String(heartbeatConsecutiveFailures);
   json += ",\"watchdog_enabled\":" + boolJson(config.heartbeatWatchdogEnabled);
-  json += ",\"watchdog_suppressed\":" + boolJson(config.heartbeatRestartSuppressed) + "}";
+  json += ",\"watchdog_suppressed\":" + boolJson(config.heartbeatRestartSuppressed);
+  json += ",\"hmac_enabled\":" + boolJson(!config.eventHmacSecret.isEmpty());
+  json += ",\"mqtt_enabled\":" + boolJson(config.mqttEnabled);
+  json += ",\"mqtt_connected\":" + boolJson(mqttClient.connected());
+  json += ",\"config_sync_enabled\":" + boolJson(config.configSyncEnabled);
+  json += ",\"config_sync_last_ok\":" + boolJson(configSyncLastOk);
+  json += ",\"config_sync_last_at\":" + quoted(lastConfigSyncAt);
+  json += ",\"config_version\":" + String(config.remoteConfigVersion) + "}";
   json += ",\"storage\":{\"ready\":" + boolJson(sdReady);
   json += ",\"total_bytes\":" + String(sdReady ? SD.totalBytes() : 0);
-  json += ",\"used_bytes\":" + String(sdReady ? SD.usedBytes() : 0) + "}";
+  json += ",\"used_bytes\":" + String(sdReady ? SD.usedBytes() : 0);
+  json += ",\"health_ok\":" + boolJson(sdHealth.lastCheckOk);
+  json += ",\"health_checks\":" + String(sdHealth.checks);
+  json += ",\"health_failures\":" + String(sdHealth.failures);
+  json += ",\"malformed_records\":" + String(sdHealth.malformedRecords);
+  json += ",\"last_checked_at\":" + quoted(sdHealth.lastCheckedAt);
+  json += ",\"last_error\":" + quoted(sdHealth.lastError) + "}";
   const String powerLabel = !config.powerSenseEnabled ? "Non configurato" :
     (externalPowerPresent ? "Rete elettrica" : "Batteria UPS");
   json += ",\"power\":{\"external\":" + boolJson(externalPowerPresent);
@@ -798,9 +1297,13 @@ String buildStatusJson() {
   json += ",\"battery_voltage_mv\":" + String(batteryVoltageMv);
   json += ",\"battery_percent\":" + String(estimatedBatteryPercent());
   json += ",\"battery_capacity_mah\":" + String(config.batteryCapacityMah);
-  json += ",\"current_sensor_configured\":false}";
+  json += ",\"current_sensor_configured\":false";
+  json += ",\"current_ma\":null";
+  json += ",\"chip_temperature_c\":" + String(temperatureRead(), 1) + "}";
   json += ",\"security\":{\"portal_auth\":\"digest\",\"portal_https\":false";
   json += ",\"csrf_protected\":true,\"rate_limit_enabled\":true";
+  json += ",\"ota_signature_required\":true,\"ota_signature_algorithm\":\"ECDSA-P256-SHA256\"";
+  json += ",\"ota_rollback_enabled\":true";
   json += ",\"default_credentials_active\":" + boolJson(
     config.adminUser == "info@casklogic.com" && config.adminPassword == "Presario41740+"
   );
@@ -829,7 +1332,15 @@ String buildStatusJson() {
     json += ",\"status\":" + String(reading.status);
     json += ",\"agc\":" + String(reading.agc);
     json += ",\"magnitude\":" + String(reading.magnitude);
-    json += ",\"position\":" + (decoded.valid ? String(decoded.position) : "null") + "}";
+    json += ",\"position\":" + (decoded.valid ? String(decoded.position) : "null");
+    json += ",\"magnet_weak\":" + boolJson(reading.magnetWeak());
+    json += ",\"magnet_strong\":" + boolJson(reading.magnetStrong());
+    json += ",\"read_failures\":" + String(sensorErrors[channel].readFailures);
+    json += ",\"missing_samples\":" + String(sensorErrors[channel].missingSamples);
+    json += ",\"weak_magnet_samples\":" + String(sensorErrors[channel].weakMagnetSamples);
+    json += ",\"strong_magnet_samples\":" + String(sensorErrors[channel].strongMagnetSamples);
+    json += ",\"unhealthy_transitions\":" + String(sensorErrors[channel].unhealthyTransitions);
+    json += ",\"last_error_at\":" + quoted(sensorErrors[channel].lastErrorAt) + "}";
   }
   json += "]}";
   return json;
@@ -848,10 +1359,23 @@ String buildSettingsJson() {
   json += ",\"subnet\":" + quoted(config.subnet);
   json += ",\"dns\":" + quoted(config.dns);
   json += ",\"backend_url\":" + quoted(config.backendUrl);
+  json += ",\"event_hmac_configured\":" + boolJson(!config.eventHmacSecret.isEmpty());
+  json += ",\"metrics_token_configured\":" + boolJson(!config.metricsToken.isEmpty());
   json += ",\"tls_ca_certificate\":" + quoted(config.tlsCaCertificate);
   json += ",\"tls_client_certificate\":" + quoted(config.tlsClientCertificate);
   json += ",\"tls_client_key_configured\":" + boolJson(!config.tlsClientPrivateKey.isEmpty());
   json += ",\"notification_url\":" + quoted(config.notificationUrl);
+  json += ",\"config_sync_enabled\":" + boolJson(config.configSyncEnabled);
+  json += ",\"config_sync_url\":" + quoted(config.configSyncUrl);
+  json += ",\"config_sync_seconds\":" + String(config.configSyncSeconds);
+  json += ",\"remote_config_version\":" + String(config.remoteConfigVersion);
+  json += ",\"mqtt_enabled\":" + boolJson(config.mqttEnabled);
+  json += ",\"mqtt_host\":" + quoted(config.mqttHost);
+  json += ",\"mqtt_port\":" + String(config.mqttPort);
+  json += ",\"mqtt_username\":" + quoted(config.mqttUsername);
+  json += ",\"mqtt_password_configured\":" + boolJson(!config.mqttPassword.isEmpty());
+  json += ",\"mqtt_base_topic\":" + quoted(config.mqttBaseTopic);
+  json += ",\"mqtt_commands_enabled\":" + boolJson(config.mqttCommandsEnabled);
   json += ",\"stable_ms\":" + String(config.stableWindowMs);
   json += ",\"heartbeat_seconds\":" + String(config.heartbeatSeconds);
   json += ",\"heartbeat_watchdog_enabled\":" + boolJson(config.heartbeatWatchdogEnabled);
@@ -939,6 +1463,290 @@ long jsonLongField(const String &line, const char *field) {
   int start = marker + strlen(field) + 3;
   while (start < static_cast<int>(line.length()) && (line[start] == ' ' || line[start] == ':')) ++start;
   return strtol(line.c_str() + start, nullptr, 10);
+}
+
+float jsonFloatField(const String &line, const char *field) {
+  const int marker = jsonFieldStart(line, field);
+  if (marker < 0) return 0;
+  int start = marker + strlen(field) + 3;
+  while (start < static_cast<int>(line.length()) && (line[start] == ' ' || line[start] == ':')) ++start;
+  return strtof(line.c_str() + start, nullptr);
+}
+
+String urlHost(const String &url) {
+  int start = url.indexOf("://");
+  start = start < 0 ? 0 : start + 3;
+  int end = url.indexOf('/', start);
+  if (end < 0) end = url.length();
+  String host = url.substring(start, end);
+  const int colon = host.indexOf(':');
+  if (colon >= 0) host = host.substring(0, colon);
+  return host;
+}
+
+String diagnosticTestJson(const char *id, const char *label, const String &status, const String &detail) {
+  return "{\"id\":" + quoted(id) + ",\"label\":" + quoted(label) +
+    ",\"status\":" + quoted(status) + ",\"detail\":" + quoted(detail) + "}";
+}
+
+String buildDiagnosticsJson(bool active) {
+  const DeviceConfig &config = configStore.get();
+  String tests[7];
+  uint8_t healthySensors = 0;
+  for (const laveggio::SensorReading &reading : sensorReadings) if (reading.healthy()) ++healthySensors;
+  tests[0] = diagnosticTestJson(
+    "sensors", "Sensori AS5600", healthySensors == laveggio::kChannelCount ? "pass" : "fail",
+    String(healthySensors) + "/" + String(laveggio::kChannelCount) + " regolari"
+  );
+  if (active) runSdHealthCheck();
+  tests[1] = diagnosticTestJson(
+    "storage", "MicroSD", !sdReady ? "fail" : (sdHealth.lastCheckOk ? "pass" : "warn"),
+    !sdReady ? "Non montata" : (sdHealth.lastError.isEmpty() ? "Lettura e scrittura riuscite" : sdHealth.lastError)
+  );
+  tests[2] = diagnosticTestJson(
+    "network", "Rete Wi-Fi", WiFi.status() == WL_CONNECTED ? "pass" : "fail",
+    WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() + " RSSI " + String(WiFi.RSSI()) + " dBm" : "Non connessa"
+  );
+
+  IPAddress resolved;
+  bool dnsOk = false;
+  if (active && WiFi.status() == WL_CONNECTED) dnsOk = WiFi.hostByName(config.ntpServer.c_str(), resolved) == 1;
+  else dnsOk = WiFi.status() == WL_CONNECTED && timeSynchronized;
+  tests[3] = diagnosticTestJson(
+    "dns", "Risoluzione DNS", dnsOk ? "pass" : "fail",
+    dnsOk ? (active ? resolved.toString() : "Operativa") : "Risoluzione non riuscita"
+  );
+
+  String backendStatus = "na";
+  String backendDetail = "Non configurato";
+  if (!config.backendUrl.isEmpty()) {
+    backendStatus = integrationLastOk ? "pass" : "warn";
+    backendDetail = "Ultimo HTTP " + String(integrationLastCode);
+    if (active && WiFi.status() == WL_CONNECTED && timeSynchronized) {
+      WiFiClientSecure client;
+      client.setCACert(config.tlsCaCertificate.c_str());
+      if (!config.tlsClientCertificate.isEmpty() && !config.tlsClientPrivateKey.isEmpty()) {
+        client.setCertificate(config.tlsClientCertificate.c_str());
+        client.setPrivateKey(config.tlsClientPrivateKey.c_str());
+      }
+      HTTPClient http;
+      int code = -1;
+      if (http.begin(client, config.backendUrl)) {
+        http.setTimeout(2500);
+        if (!config.backendToken.isEmpty()) http.addHeader("Authorization", "Bearer " + config.backendToken);
+        code = http.sendRequest("HEAD");
+        http.end();
+      }
+      backendStatus = code > 0 ? "pass" : "fail";
+      backendDetail = code > 0 ? "HTTPS raggiungibile, HTTP " + String(code) : "Connessione HTTPS fallita";
+    }
+  }
+  tests[4] = diagnosticTestJson("backend", "Gestionale", backendStatus, backendDetail);
+  tests[5] = diagnosticTestJson(
+    "memory", "Memoria libera", ESP.getFreeHeap() >= 60000 ? "pass" : "warn",
+    String(ESP.getFreeHeap()) + " byte heap liberi"
+  );
+  const bool batteryAvailable = config.batterySenseEnabled && batteryVoltageMv > 0;
+  tests[6] = diagnosticTestJson(
+    "battery", "Batteria", !config.batterySenseEnabled ? "na" : (batteryAvailable ? "pass" : "warn"),
+    !config.batterySenseEnabled ? "Monitoraggio non configurato" : String(batteryVoltageMv) + " mV"
+  );
+
+  String json = "{\"captured_at\":" + quoted(timestampIso());
+  json += ",\"active_tests\":" + boolJson(active);
+  json += ",\"time_synchronized\":" + boolJson(timeSynchronized);
+  json += ",\"tests\":[";
+  for (uint8_t index = 0; index < 7; ++index) {
+    if (index) json += ',';
+    json += tests[index];
+  }
+  json += "]}";
+  if (active) logSystem("info", "autodiagnostics_completed");
+  return json;
+}
+
+struct DiagnosticChartPoint {
+  String capturedAt;
+  long batteryMv;
+  float temperatureC;
+  long rssi;
+  long freeHeap;
+};
+
+String buildDailyDiagnosticsJson() {
+  std::vector<DiagnosticChartPoint> points;
+  points.reserve(288);
+  const String cutoff = timestampIso(time(nullptr) - 86400).substring(0, 19);
+  uint32_t matchingIndex = 0;
+  const std::vector<String> paths = listNdjsonFiles("/logs", "system");
+  for (const String &path : paths) {
+    File file = SD.open(path, FILE_READ);
+    if (!file) continue;
+    while (file.available()) {
+      String line = file.readStringUntil('\n');
+      if (line.indexOf("\"event\":\"sensor_diagnostics\"") < 0) continue;
+      const String capturedAt = jsonStringField(line, "captured_at");
+      if (capturedAt.isEmpty() || capturedAt.substring(0, 19) < cutoff) continue;
+      if ((matchingIndex++ % 5) != 0) continue;
+      if (points.size() >= 288) points.erase(points.begin());
+      points.push_back({
+        capturedAt,
+        jsonLongField(line, "battery_voltage_mv"),
+        jsonFloatField(line, "chip_temperature_c"),
+        jsonLongField(line, "wifi_rssi"),
+        jsonLongField(line, "free_heap")
+      });
+    }
+    file.close();
+  }
+  String json = "{\"current_available\":false,\"points\":[";
+  for (size_t index = 0; index < points.size(); ++index) {
+    if (index) json += ',';
+    const DiagnosticChartPoint &point = points[index];
+    json += "{\"captured_at\":" + quoted(point.capturedAt);
+    json += ",\"battery_mv\":" + String(point.batteryMv);
+    json += ",\"current_ma\":null";
+    json += ",\"temperature_c\":" + String(point.temperatureC, 1);
+    json += ",\"rssi\":" + String(point.rssi);
+    json += ",\"free_heap\":" + String(point.freeHeap) + "}";
+  }
+  json += "]}";
+  return json;
+}
+
+String buildFirmwareUpdatesJson() {
+  if (!sdReady || !SD.exists("/updates/registry.ndjson")) return "{\"items\":[]}";
+  String text = readTailText("/updates/registry.ndjson", 32768);
+  std::vector<String> lines;
+  int start = 0;
+  while (start < static_cast<int>(text.length())) {
+    int end = text.indexOf('\n', start);
+    if (end < 0) end = text.length();
+    String line = text.substring(start, end);
+    line.trim();
+    if (line.startsWith("{") && line.endsWith("}")) lines.push_back(line);
+    start = end + 1;
+  }
+  String json = "{\"items\":[";
+  const size_t first = lines.size() > 50 ? lines.size() - 50 : 0;
+  for (size_t index = lines.size(); index > first; --index) {
+    if (index != lines.size()) json += ',';
+    json += lines[index - 1];
+  }
+  json += "]}";
+  return json;
+}
+
+String buildAnonymizedConfigJson() {
+  const DeviceConfig &config = configStore.get();
+  String json = "{\"firmware_version\":" + quoted(kFirmwareVersion);
+  json += ",\"wifi_configured\":" + boolJson(!config.wifiSsid.isEmpty());
+  json += ",\"network_mode\":" + quoted(config.useDhcp ? "dhcp" : "static");
+  json += ",\"backend_configured\":" + boolJson(!config.backendUrl.isEmpty());
+  json += ",\"notification_configured\":" + boolJson(!config.notificationUrl.isEmpty());
+  json += ",\"config_sync_configured\":" + boolJson(!config.configSyncUrl.isEmpty());
+  json += ",\"mqtt_host_configured\":" + boolJson(!config.mqttHost.isEmpty());
+  json += ",\"mqtt_port\":" + String(config.mqttPort);
+  json += ",\"hmac_configured\":" + boolJson(!config.eventHmacSecret.isEmpty());
+  json += ",\"metrics_token_configured\":" + boolJson(!config.metricsToken.isEmpty());
+  json += ",\"mtls_configured\":" + boolJson(!config.tlsClientCertificate.isEmpty());
+  json += ",\"remote_config_version\":" + String(config.remoteConfigVersion);
+  json += ",\"history_enabled\":" + boolJson(config.historyEnabled);
+  json += ",\"history_keep_forever\":" + boolJson(config.historyKeepForever);
+  json += ",\"battery_sense_enabled\":" + boolJson(config.batterySenseEnabled) + "}";
+  return json;
+}
+
+String anonymizeSupportText(String text) {
+  const DeviceConfig &config = configStore.get();
+  const String sensitiveValues[] = {
+    config.deviceId,
+    config.hostname,
+    config.wifiSsid,
+    config.staticIp,
+    config.gateway,
+    config.dns,
+    config.backendUrl,
+    config.notificationUrl,
+    config.configSyncUrl,
+    config.mqttHost,
+    config.mqttUsername,
+    config.adminUser,
+    urlHost(config.backendUrl),
+    urlHost(config.notificationUrl),
+    urlHost(config.configSyncUrl),
+    WiFi.localIP().toString(),
+    WiFi.gatewayIP().toString(),
+    WiFi.dnsIP().toString()
+  };
+  for (const String &value : sensitiveValues) {
+    if (value.length() >= 3 && value != "0.0.0.0") text.replace(value, "[redacted]");
+  }
+  return text;
+}
+
+String buildSupportDeviceStatusJson() {
+  String json = "{\"captured_at\":" + quoted(timestampIso());
+  json += ",\"time_synchronized\":" + boolJson(timeSynchronized);
+  json += ",\"boot_id\":" + quoted(bootId);
+  json += ",\"uptime_seconds\":" + String(millis() / 1000);
+  json += ",\"reset_reason\":" + quoted(resetReasonLabel());
+  json += ",\"free_heap\":" + String(ESP.getFreeHeap());
+  json += ",\"wifi_connected\":" + boolJson(WiFi.status() == WL_CONNECTED);
+  json += ",\"wifi_rssi\":" + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0);
+  json += ",\"sd_ready\":" + boolJson(sdReady);
+  json += ",\"sd_health_ok\":" + boolJson(sdHealth.lastCheckOk);
+  json += ",\"battery_voltage_mv\":" + String(batteryVoltageMv);
+  json += ",\"chip_temperature_c\":" + String(temperatureRead(), 1);
+  json += ",\"integration_last_ok\":" + boolJson(integrationLastOk);
+  json += ",\"mqtt_connected\":" + boolJson(mqttClient.connected());
+  json += ",\"sensors\":[";
+  for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
+    if (channel) json += ',';
+    const laveggio::SensorReading &reading = sensorReadings[channel];
+    json += "{\"channel\":" + String(channel);
+    json += ",\"present\":" + boolJson(reading.present);
+    json += ",\"healthy\":" + boolJson(reading.healthy());
+    json += ",\"raw\":" + String(reading.raw);
+    json += ",\"status\":" + String(reading.status);
+    json += ",\"agc\":" + String(reading.agc);
+    json += ",\"magnitude\":" + String(reading.magnitude);
+    json += ",\"read_failures\":" + String(sensorErrors[channel].readFailures);
+    json += ",\"unhealthy_transitions\":" + String(sensorErrors[channel].unhealthyTransitions) + "}";
+  }
+  json += "]}";
+  return json;
+}
+
+String createSupportZip() {
+  if (!sdReady || !ensureDirectoryTree("/diagnostics")) return "";
+  const String path = "/diagnostics/support-" + bootId + ".zip";
+  if (SD.exists(path)) SD.remove(path);
+  File file = SD.open(path, FILE_WRITE);
+  if (!file) return "";
+  StoredZipWriter zip(file);
+  bool ok = zip.add(
+    "README.txt",
+    "Pacchetto assistenza Laveggio Printomatic.\r\n"
+    "Credenziali, token, chiavi, certificati, SSID e indirizzi IP sono esclusi.\r\n"
+  );
+  ok &= zip.add("configuration-anonymized.json", buildAnonymizedConfigJson());
+  ok &= zip.add("device-status.json", buildSupportDeviceStatusJson());
+  ok &= zip.add("autodiagnostics.json", anonymizeSupportText(buildDiagnosticsJson(false)));
+  ok &= zip.add("diagnostic-series-24h.json", buildDailyDiagnosticsJson());
+  ok &= zip.add("system-log-tail.ndjson", anonymizeSupportText(readLatestLogTail(65536)));
+  ok &= zip.add(
+    "firmware-updates.ndjson",
+    SD.exists("/updates/registry.ndjson") ? readTailText("/updates/registry.ndjson", 32768) : ""
+  );
+  ok &= zip.finish();
+  file.close();
+  if (!ok) {
+    SD.remove(path);
+    return "";
+  }
+  logSystem("info", "support_package_created");
+  return path;
 }
 
 String jsonDigitsField(const String &line) {
@@ -1131,8 +1939,8 @@ void streamNdjsonExport(
 }
 
 void registerWebRoutes() {
-  const char *requestHeaders[] = {"Authorization", "X-CSRF-Token"};
-  webServer.collectHeaders(requestHeaders, 2);
+  const char *requestHeaders[] = {"Authorization", "X-CSRF-Token", "X-Firmware-Size", "X-Firmware-Version"};
+  webServer.collectHeaders(requestHeaders, 4);
   webServer.on("/", HTTP_GET, [] {
     if (!authorized()) return;
     sendSecurityHeaders();
@@ -1170,6 +1978,56 @@ void registerWebRoutes() {
   webServer.on("/api/settings", HTTP_GET, [] {
     if (!authorized()) return;
     sendJson(buildSettingsJson());
+  });
+  webServer.on("/api/diagnostics", HTTP_GET, [] {
+    if (!authorized()) return;
+    sendJson(buildDiagnosticsJson(false));
+  });
+  webServer.on("/api/diagnostics/run", HTTP_POST, [] {
+    if (!authorized()) return;
+    sendJson(buildDiagnosticsJson(true));
+  });
+  webServer.on("/api/diagnostics/daily", HTTP_GET, [] {
+    if (!authorized()) return;
+    sendJson(buildDailyDiagnosticsJson());
+  });
+  webServer.on("/api/firmware/updates", HTTP_GET, [] {
+    if (!authorized()) return;
+    sendJson(buildFirmwareUpdatesJson());
+  });
+  webServer.on("/api/support-package", HTTP_GET, [] {
+    if (!authorized()) return;
+    const String path = createSupportZip();
+    if (path.isEmpty()) {
+      sendError(500, "Impossibile creare il pacchetto assistenza");
+      return;
+    }
+    File file = SD.open(path, FILE_READ);
+    if (!file) {
+      SD.remove(path);
+      sendError(500, "Impossibile leggere il pacchetto assistenza");
+      return;
+    }
+    sendSecurityHeaders();
+    webServer.sendHeader("Cache-Control", "no-store");
+    webServer.sendHeader("Content-Disposition", "attachment; filename=laveggio-support-" + bootId + ".zip");
+    webServer.streamFile(file, "application/zip");
+    file.close();
+    SD.remove(path);
+  });
+  webServer.on("/api/metrics", HTTP_GET, [] {
+    if (!authorizedMetrics()) return;
+    sendSecurityHeaders();
+    webServer.sendHeader("Cache-Control", "no-store");
+    webServer.send(200, "text/plain; version=0.0.4; charset=utf-8", buildPrometheusMetrics());
+  });
+  webServer.on("/api/config/sync", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (!syncRemoteConfiguration()) {
+      sendError(502, lastConfigSyncError);
+      return;
+    }
+    sendJson("{\"ok\":true,\"version\":" + String(configStore.get().remoteConfigVersion) + "}");
   });
   webServer.on("/api/calibration", HTTP_GET, [] {
     if (!authorized()) return;
@@ -1276,6 +2134,8 @@ void registerWebRoutes() {
     config.subnet = webServer.arg("subnet");
     config.dns = webServer.arg("dns");
     configStore.saveSettings();
+    timeSynchronized = false;
+    requestTimeSynchronization();
     logSystem("info", "network_settings_saved");
     sendJson("{\"ok\":true,\"restart_required\":true}");
     scheduledRestartMs = millis() + 1800;
@@ -1289,24 +2149,48 @@ void registerWebRoutes() {
     const String clientCertificate = webServer.arg("tls_client_certificate");
     const String clientPrivateKey = webServer.arg("tls_client_private_key");
     const String backendToken = webServer.arg("backend_token");
+    const String eventHmacSecret = webServer.arg("event_hmac_secret");
+    const String metricsToken = webServer.arg("metrics_token");
     const String deviceId = webServer.arg("device_id");
+    const String configSyncUrl = webServer.arg("config_sync_url");
+    const String mqttHost = webServer.arg("mqtt_host");
+    const String mqttUsername = webServer.arg("mqtt_username");
+    const String mqttPassword = webServer.arg("mqtt_password");
+    const String mqttBaseTopic = webServer.arg("mqtt_base_topic");
     if (backendUrl.length() >= sizeof(OutboundMessage::url) ||
         notificationUrl.length() >= sizeof(OutboundMessage::url) ||
         backendToken.length() >= sizeof(OutboundMessage::token) ||
         caCertificate.length() >= sizeof(OutboundMessage::caCertificate) ||
         clientCertificate.length() >= sizeof(OutboundMessage::clientCertificate) ||
         clientPrivateKey.length() >= sizeof(OutboundMessage::clientPrivateKey) ||
-        deviceId.length() > 96) {
+        deviceId.length() > 96 || configSyncUrl.length() >= sizeof(OutboundMessage::url) ||
+        mqttHost.length() > 253 || mqttUsername.length() > 128 || mqttPassword.length() > 256 ||
+        mqttBaseTopic.length() > 160 || eventHmacSecret.length() > 256 || metricsToken.length() > 256) {
       sendError(400, "Uno o piu campi superano i limiti del dispositivo");
       return;
     }
     if ((!backendUrl.isEmpty() && !backendUrl.startsWith("https://")) ||
-        (!notificationUrl.isEmpty() && !notificationUrl.startsWith("https://"))) {
+        (!notificationUrl.isEmpty() && !notificationUrl.startsWith("https://")) ||
+        (!configSyncUrl.isEmpty() && !configSyncUrl.startsWith("https://"))) {
       sendError(400, "Gli endpoint remoti devono usare HTTPS");
       return;
     }
-    if ((!backendUrl.isEmpty() || !notificationUrl.isEmpty()) && caCertificate.isEmpty()) {
+    if ((!backendUrl.isEmpty() || !notificationUrl.isEmpty() || !configSyncUrl.isEmpty() ||
+         parseBool(webServer.arg("mqtt_enabled"))) && caCertificate.isEmpty()) {
       sendError(400, "Certificato CA richiesto per verificare HTTPS");
+      return;
+    }
+    if ((!eventHmacSecret.isEmpty() && eventHmacSecret.length() < 32) ||
+        (!metricsToken.isEmpty() && metricsToken.length() < 24)) {
+      sendError(400, "Le chiavi HMAC e metriche devono essere sufficientemente lunghe");
+      return;
+    }
+    if (parseBool(webServer.arg("mqtt_enabled")) && (mqttHost.isEmpty() || mqttHost.indexOf("://") >= 0)) {
+      sendError(400, "Host MQTT non valido");
+      return;
+    }
+    if (mqttBaseTopic.indexOf('#') >= 0 || mqttBaseTopic.indexOf('+') >= 0) {
+      sendError(400, "Il topic MQTT non puo contenere wildcard");
       return;
     }
     const String effectivePrivateKey = clientPrivateKey.isEmpty()
@@ -1320,8 +2204,20 @@ void registerWebRoutes() {
     config.deviceId = deviceId;
     config.backendUrl = backendUrl;
     if (!backendToken.isEmpty()) config.backendToken = backendToken;
+    if (!eventHmacSecret.isEmpty()) config.eventHmacSecret = eventHmacSecret;
+    if (!metricsToken.isEmpty()) config.metricsToken = metricsToken;
     config.tlsCaCertificate = caCertificate;
     config.notificationUrl = notificationUrl;
+    config.configSyncEnabled = parseBool(webServer.arg("config_sync_enabled"));
+    config.configSyncUrl = configSyncUrl;
+    config.configSyncSeconds = constrain(webServer.arg("config_sync_seconds").toInt(), 60, 86400);
+    config.mqttEnabled = parseBool(webServer.arg("mqtt_enabled"));
+    config.mqttHost = mqttHost;
+    config.mqttPort = constrain(webServer.arg("mqtt_port").toInt(), 1, 65535);
+    config.mqttUsername = mqttUsername;
+    if (!mqttPassword.isEmpty()) config.mqttPassword = mqttPassword;
+    config.mqttBaseTopic = mqttBaseTopic.isEmpty() ? "casklogic/laveggio" : mqttBaseTopic;
+    config.mqttCommandsEnabled = parseBool(webServer.arg("mqtt_commands_enabled"));
     if (clientCertificate.isEmpty()) {
       config.tlsClientCertificate = "";
       config.tlsClientPrivateKey = "";
@@ -1337,6 +2233,8 @@ void registerWebRoutes() {
     heartbeatConsecutiveFailures = 0;
     stabilityTracker.setStableWindow(config.stableWindowMs);
     configStore.saveSettings();
+    if (mqttClient.connected()) mqttClient.disconnect();
+    configSyncAttemptedThisBoot = false;
     logSystem("info", "integration_settings_saved");
     sendJson("{\"ok\":true}");
   });
@@ -1385,6 +2283,8 @@ void registerWebRoutes() {
     config.batteryMaxMv = batteryMaxMv;
     config.batteryCapacityMah = constrain(webServer.arg("battery_capacity_mah").toInt(), 100, 20000);
     configStore.saveSettings();
+    timeSynchronized = false;
+    requestTimeSynchronization();
     pruneExpiredArchives();
     logSystem("info", "system_settings_saved");
     sendJson("{\"ok\":true}");
@@ -1430,7 +2330,7 @@ void registerWebRoutes() {
         sendJson("{\"ok\":true,\"restart_required\":true}");
         scheduledRestartMs = millis() + 1200;
       } else {
-        sendError(500, Update.errorString());
+        sendError(500, otaErrorDetail.isEmpty() ? Update.errorString() : otaErrorDetail);
       }
     },
     [] {
@@ -1438,14 +2338,42 @@ void registerWebRoutes() {
       HTTPUpload &upload = webServer.upload();
       if (upload.status == UPLOAD_FILE_START) {
         otaSucceeded = false;
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
+        otaSignatureVerified = false;
+        otaErrorDetail = "";
+        otaPreviousVersion = kFirmwareVersion;
+        otaTargetLabel = webServer.header("X-Firmware-Version");
+        if (otaTargetLabel.isEmpty()) otaTargetLabel = upload.filename;
+        const size_t signedSize = static_cast<size_t>(strtoull(webServer.header("X-Firmware-Size").c_str(), nullptr, 10));
+        if (signedSize <= 512) {
+          otaErrorDetail = "Dimensione firmware firmato mancante o non valida";
+          return;
+        }
+        if (!Update.installSignature(&otaVerifier)) {
+          otaErrorDetail = "Impossibile inizializzare la verifica ECDSA";
+          return;
+        }
+        if (!Update.begin(signedSize)) {
+          otaErrorDetail = Update.errorString();
+          Update.printError(Serial);
+          return;
+        }
+        recordFirmwareUpdate("started", otaTargetLabel, "signed_bytes=" + String(signedSize));
       } else if (upload.status == UPLOAD_FILE_WRITE) {
-        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) Update.printError(Serial);
+        if (!Update.isRunning()) return;
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+          otaErrorDetail = Update.errorString();
+          Update.printError(Serial);
+        }
       } else if (upload.status == UPLOAD_FILE_END) {
-        otaSucceeded = Update.end(true);
+        otaSucceeded = Update.isRunning() && Update.end();
+        otaSignatureVerified = otaSucceeded;
+        if (!otaSucceeded) otaErrorDetail = Update.errorString();
+        recordFirmwareUpdate(otaSucceeded ? "verified" : "failed", otaTargetLabel, otaErrorDetail);
         logSystem(otaSucceeded ? "info" : "error", otaSucceeded ? "ota_complete" : "ota_failed");
       } else if (upload.status == UPLOAD_FILE_ABORTED) {
         Update.abort();
+        otaErrorDetail = "Upload annullato";
+        recordFirmwareUpdate("aborted", otaTargetLabel, otaErrorDetail);
         logSystem("warning", "ota_aborted");
       }
     }
@@ -1477,6 +2405,24 @@ void initializeIdentity() {
 void initializeStorage() {
   sdReady = SD.begin(kSdCs, SPI, 20000000);
   if (sdReady) ensureSdDirectories();
+}
+
+void validatePendingOta() {
+  const esp_partition_t *running = esp_ota_get_running_partition();
+  esp_ota_img_states_t state;
+  if (running == nullptr || esp_ota_get_state_partition(running, &state) != ESP_OK ||
+      state != ESP_OTA_IMG_PENDING_VERIFY) return;
+  if (ESP.getFreeHeap() < 50000 || outboundQueue == nullptr) {
+    recordFirmwareUpdate("rollback", kFirmwareVersion, "Autotest di avvio non superato");
+    delay(100);
+    esp_ota_mark_app_invalid_rollback_and_reboot();
+    return;
+  }
+  if (esp_ota_mark_app_valid_cancel_rollback() == ESP_OK) {
+    otaSignatureVerified = true;
+    recordFirmwareUpdate("boot_validated", kFirmwareVersion, "Rollback annullato dopo autotest");
+    logSystem("info", "ota_boot_validated", kFirmwareVersion);
+  }
 }
 
 void checkPowerSource() {
@@ -1538,7 +2484,6 @@ void setup() {
   displayOn = configStore.get().displayDefaultOn;
   display.setEnabled(displayOn);
   initializeStorage();
-  logSystem("info", "device_started", "firmware=" + String(kFirmwareVersion));
 
   Serial.printf("Rescue AP: %s\n", kRescueSsid);
   Serial.printf("Rescue password: %s\n", kRescuePassword);
@@ -1546,8 +2491,15 @@ void setup() {
 
   outboundQueue = xQueueCreate(2, sizeof(OutboundMessage));
   xTaskCreate(integrationTask, "integration", 8192, nullptr, 1, nullptr);
+  mqttClient.setCallback(mqttMessageReceived);
+  mqttClient.setBufferSize(2048);
+  mqttClient.setKeepAlive(30);
+  mqttClient.setSocketTimeout(3);
   connectNetwork();
   registerWebRoutes();
+  runSdHealthCheck();
+  logSystem("info", "device_started", "firmware=" + String(kFirmwareVersion));
+  validatePendingOta();
 
   externalPowerPresent = !configStore.get().powerSenseEnabled ||
     ((digitalRead(kPowerSensePin) == HIGH) == configStore.get().powerSenseActiveHigh);
@@ -1561,6 +2513,8 @@ void loop() {
   webServer.handleClient();
   maintainRescueAccessPoint(now);
   processHeartbeatResult();
+  pollTimeSynchronization(now);
+  maintainMqtt(now);
 
   if (now - lastSensorReadMs >= kSensorIntervalMs) {
     lastSensorReadMs = now;
@@ -1590,6 +2544,17 @@ void loop() {
   if (now - lastDiagnosticLogMs >= kDiagnosticLogIntervalMs) {
     lastDiagnosticLogMs = now;
     recordSensorDiagnostics();
+  }
+
+  if (now - lastSdCheckMs >= kSdCheckIntervalMs) {
+    lastSdCheckMs = now;
+    runSdHealthCheck();
+  }
+
+  const DeviceConfig &config = configStore.get();
+  if (config.configSyncEnabled && timeSynchronized &&
+      (!configSyncAttemptedThisBoot || now - lastConfigSyncMs >= config.configSyncSeconds * 1000UL)) {
+    syncRemoteConfiguration();
   }
 
   if ((lastRetentionMs == 0 && time(nullptr) > 1700000000) ||

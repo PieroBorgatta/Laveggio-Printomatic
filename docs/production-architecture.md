@@ -95,13 +95,16 @@ calibrazione reale.
 
 ## Trasporto
 
-Il dispositivo usa richieste `HTTPS POST` asincrone rispetto alla scansione dei
-sensori. Il certificato CA deve essere configurato dall'interfaccia web; il
-firmware rifiuta endpoint HTTP e HTTPS privo di una CA attendibile. Certificato
-e chiave client opzionali consentono mTLS. Il backend deve includere:
+Il dispositivo usa richieste `HTTPS POST` asincrone e puo pubblicare via MQTT
+TLS senza interrompere la scansione dei sensori. Il certificato CA deve essere
+configurato dall'interfaccia web; il firmware rifiuta endpoint HTTP e TLS privo
+di una CA attendibile. Certificato e chiave client opzionali consentono mTLS.
+Ogni pesata puo essere firmata HMAC-SHA256. Non e presente una coda persistente
+di trasmissione. Il backend deve includere:
 
 - TLS con CA configurata sul dispositivo;
 - autenticazione per dispositivo;
+- verifica HMAC in tempo costante e deduplicazione per `event_id`;
 - heartbeat e timeout di misura scaduta;
 - riconnessione con backoff;
 - `boot_id` e `sequence` per deduplicazione e riordino;
@@ -119,6 +122,8 @@ sostituiscono la cifratura del trasporto. Dettagli in
 - watchdog hardware alimentato soltanto da task realmente sani;
 - riconnessione Wi-Fi e backend indipendenti dalla scansione locale;
 - configurazione Wi-Fi e backend non inclusa in chiaro nel repository;
+- sincronizzazione remota solo di campi operativi in whitelist, con versione
+  crescente e conservazione dell'ultima copia locale valida;
 - watchdog heartbeat opzionale con un solo riavvio e inibizione persistente
   fino alla successiva risposta valida;
 - stato locale evidente: sensori, Wi-Fi, backend e misura valida;

@@ -12,9 +12,15 @@ eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 - display locale spento per impostazione predefinita e controllabile dal web;
 - storico e log NDJSON settimanali in cartelle anno/mese su microSD FAT32;
 - campione diagnostico dei quattro sensori registrato ogni minuto;
+- sincronizzazione NTP richiesta subito dopo il Wi-Fi e completata senza
+  bloccare l'avvio o la lettura dei sensori;
 - Wi-Fi DHCP o statico, scansione reti e access point di recupero;
 - autenticazione HTTP Digest, rate limit, CSRF e header browser restrittivi;
-- invio asincrono di snapshot completi e heartbeat al futuro backend CaskLogic;
+- invio asincrono HTTPS e MQTT TLS opzionale verso il futuro backend CaskLogic;
+- firma HMAC-SHA256 delle pesate, endpoint Prometheus e configurazione remota
+  versionata con whitelist e copia locale valida;
+- nessuna coda persistente di trasmissione: la microSD conserva lo storico, ma
+  gli eventi MQTT non consegnati non vengono accodati per un reinvio;
 - CA obbligatoria, soli endpoint HTTPS e certificato client mTLS opzionale;
 - heartbeat con watchdog opzionale e protezione persistente dai reboot loop;
 - storico filtrabile e ordinabile, con sole 20 righe al primo caricamento ed
@@ -22,7 +28,11 @@ eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 - rotazione dimensionale e retention delle pesate configurabili;
 - tensione e stima percentuale della batteria opzionali su GPIO0;
 - rilevazione opzionale della perdita di alimentazione esterna;
-- aggiornamento firmware OTA con doppia partizione;
+- autodiagnosi, grafici delle ultime 24 ore e pacchetto assistenza ZIP
+  anonimizzato;
+- controllo periodico della microSD e contatori di errore/magnete per sensore;
+- aggiornamento firmware OTA firmato ECDSA-P256 con doppia partizione,
+  rollback e registro degli aggiornamenti;
 - simulatore locale che usa gli stessi file HTML, CSS e JavaScript incorporati.
 
 ## Compilazione
@@ -40,13 +50,16 @@ py -m platformio run
 
 Artefatti principali:
 
-- `.pio/build/waveshare_esp32c6_lcd_147/firmware.bin`: aggiornamento OTA;
+- `.pio/build/waveshare_esp32c6_lcd_147/firmware.signed.bin`: aggiornamento OTA
+  accettato dal portale;
+- `.pio/build/waveshare_esp32c6_lcd_147/firmware.bin`: binario non firmato
+  usato come input della firma, non caricabile dal portale;
 - `.pio/build/waveshare_esp32c6_lcd_147/firmware.factory.bin`: prima installazione completa.
 
-Misure della build `1.1.0` verificata il 29 agosto 2026:
+Misure della build `1.2.0` verificata il 29 agosto 2026:
 
-- RAM statica: `49.916 / 327.680 byte` (`15,2%`);
-- flash applicazione: `1.592.462 / 1.900.544 byte` (`83,8%`).
+- RAM statica: `50.708 / 327.680 byte` (`15,5%`);
+- flash applicazione: `1.686.942 / 1.900.544 byte` (`88,8%`).
 
 La RAM allocata dinamicamente per coda HTTPS, task e richieste web non e
 compresa nel primo valore; prima dell'installazione operativa va quindi
@@ -55,6 +68,11 @@ controllato anche l'heap libero esposto nella pagina Sistema.
 Il file `include/WebAssets.h` e generato automaticamente da `data/` prima della
 compilazione. Deve essere versionato affinche il contenuto web incorporato resti
 ispezionabile e riproducibile.
+
+La procedura di gestione delle chiavi e descritta in
+[`../../docs/firmware-signing.md`](../../docs/firmware-signing.md). La chiave
+privata non appartiene al repository e deve essere custodita e sottoposta a
+backup separatamente.
 
 ## Simulatore e test API
 
@@ -92,6 +110,7 @@ La scheda deve essere FAT32. Il firmware crea:
 /logs/YYYY/MM/system-YYYY-Www.ndjson
 /weights/unsynced/history-<boot-id>.ndjson
 /logs/unsynced/system-<boot-id>.ndjson
+/updates/registry.ndjson
 ```
 
 Lo storico viene scritto soltanto quando tutte le cifre sono valide, la misura
