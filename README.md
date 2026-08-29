@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="firmware/production-gateway/data/casklogicmark.png" width="104" alt="Marchio CaskLogic">
+  <img src="docs/assets/casklogic-logo.png" width="280" alt="CaskLogic">
 </p>
-
-<h2 align="center">CaskLogic Solutions</h2>
 
 <h1 align="center">Laveggio Printomatic</h1>
 
@@ -21,6 +19,7 @@
 <p align="center">
   <a href="#-panoramica">Panoramica</a> ·
   <a href="#-funzioni">Funzioni</a> ·
+  <a href="#-calibrazione-guidata">Calibrazione</a> ·
   <a href="#-hardware">Hardware</a> ·
   <a href="#-avvio-rapido">Avvio rapido</a> ·
   <a href="#-sicurezza">Sicurezza</a> ·
@@ -63,6 +62,69 @@ documentazione hardware.
 
 Il firmware non usa una coda persistente per gli eventi verso il gestionale e
 non trasforma la microSD in un NAS.
+
+## 🖥️ Pagine del portale
+
+| Pagina | Cosa permette di fare |
+| --- | --- |
+| **Riepilogo** | Leggere peso, stabilità, stato dei quattro sensori, frequenza di scansione, Wi-Fi, microSD, alimentazione e batteria. Il display fisico può essere acceso solo quando serve e rimane spento per default. |
+| **Calibrazione** | Associare a ciascuna manopola le dieci posizioni `0–9`, salvare il valore magnetico reale e regolare moltiplicatore, tolleranza e isteresi senza ricompilare il firmware. |
+| **Storico** | Consultare soltanto le 20 pesate più recenti al primo accesso, filtrare e ordinare ogni colonna ed esportare esattamente il risultato dei filtri attivi. |
+| **Rete e gestionale** | Cercare reti Wi-Fi, scegliere DHCP o IP statico, configurare HTTPS/mTLS, HMAC, heartbeat, MQTT TLS e sincronizzazione controllata dal gestionale. |
+| **Sistema** | Gestire display predefinito, NTP, fuso orario, credenziali, retention, dimensione dei file, batteria, log, riavvio e aggiornamento OTA firmato. |
+| **Autodiagnosi** | Eseguire prove attive, controllare errori e magneti dei sensori, osservare i grafici giornalieri e scaricare un pacchetto assistenza anonimizzato. |
+| **CaskLogic** | Consultare contatti di assistenza, titolarità, crediti, versione e informazioni legali del dispositivo. |
+
+## 🎛️ Calibrazione guidata
+
+![Calibrazione dei quattro sensori](docs/assets/laveggio-calibrazione.png)
+
+Ogni sensore rappresenta una cifra della pesa. I valori predefiniti dei quattro
+moltiplicatori sono `10.000`, `1.000`, `100` e `10 kg`; devono essere confermati
+durante il collaudo meccanico reale.
+
+### Procedura
+
+1. Selezionare il sensore corrispondente alla manopola da calibrare.
+2. Portare fisicamente la manopola sulla cifra `0`.
+3. Verificare che **Qualità magnete** indichi `Regolare` e che il valore corrente
+   sia stabile.
+4. Premere il riquadro `0 · Memorizza`: il firmware salva in NVS il valore
+   grezzo AS5600 letto in quell'istante.
+5. Ripetere la stessa operazione per le posizioni da `1` a `9`.
+6. Impostare moltiplicatore, tolleranza e isteresi, quindi premere
+   **Salva parametri**.
+7. Ripetere la procedura per tutti e quattro i sensori, fino a raggiungere
+   `40/40 punti`.
+
+Un singolo punto può essere rimemorizzato in qualsiasi momento cliccando di
+nuovo la relativa cifra. **Azzera canale** elimina soltanto i dieci punti del
+sensore selezionato e richiede conferma; non modifica gli altri canali.
+
+| Parametro | Effetto |
+| --- | --- |
+| **Moltiplicatore kg** | Determina il contributo della cifra al peso totale: `posizione × moltiplicatore`. |
+| **Tolleranza** | Distanza angolare massima tra lettura corrente e punto memorizzato affinché la cifra sia considerata valida. |
+| **Isteresi** | Mantiene la posizione precedente entro una fascia aggiuntiva, evitando passaggi continui fra due cifre causati da vibrazioni o gioco meccanico. |
+| **Finestra di stabilità** | Tempo durante il quale tutte le cifre devono restare invariate prima che la misura diventi una nuova pesata stabile. |
+
+Il confronto usa la distanza circolare dell'AS5600, quindi gestisce
+correttamente anche il passaggio fra `4095` e `0`. Se un magnete è assente,
+troppo debole, troppo forte, fuori tolleranza o non calibrato, l'intera misura
+rimane non valida e non viene registrata come nuova pesata.
+
+## ⚙️ Dalla lettura alla pesata
+
+1. Il multiplexer interroga continuamente i quattro AS5600 a `100 kHz`.
+2. Ogni valore grezzo viene confrontato con i dieci punti del proprio canale.
+3. Tolleranza e isteresi determinano la cifra riconosciuta senza oscillazioni.
+4. Le quattro cifre vengono moltiplicate e sommate per ottenere i chilogrammi.
+5. La combinazione deve restare invariata per la finestra di stabilità.
+6. Solo una combinazione valida, stabile e diversa dalla precedente genera una
+   nuova riga nello storico e un evento firmato verso il gestionale.
+
+La microSD conserva lo storico indipendentemente dalla connessione di rete, ma
+non viene usata come coda automatica di reinvio.
 
 ## 📊 Autodiagnosi
 
