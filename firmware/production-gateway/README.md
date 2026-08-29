@@ -59,7 +59,12 @@ Artefatti principali:
 Misure della build `1.2.0` verificata il 29 agosto 2026:
 
 - RAM statica: `50.708 / 327.680 byte` (`15,5%`);
-- flash applicazione: `1.686.942 / 1.900.544 byte` (`88,8%`).
+- flash applicazione: `1.686.942 / 2.031.616 byte` (`83,0%`).
+
+Le due partizioni OTA occupano `0x1F0000` byte ciascuna. La partizione SPIFFS
+e stata rimossa perche gli asset web sono incorporati nel firmware e i dati
+operativi risiedono sulla microSD. Il file OTA firmato verificato lascia circa
+`286.624 byte` (`14,1%`) in ciascuno slot.
 
 La RAM allocata dinamicamente per coda HTTPS, task e richieste web non e
 compresa nel primo valore; prima dell'installazione operativa va quindi

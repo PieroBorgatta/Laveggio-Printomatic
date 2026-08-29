@@ -52,7 +52,9 @@ stato verificato con strumenti host:
 
 - compilazione PlatformIO per `esp32-c6-devkitc-1` con Arduino ESP32;
 - RAM statica `50.708 / 327.680 byte` (`15,5%`);
-- flash applicazione `1.686.942 / 1.900.544 byte` (`88,8%`);
+- flash applicazione `1.686.942 / 2.031.616 byte` (`83,0%`);
+- immagine OTA firmata `1.744.992 byte`, con `286.624 byte` (`14,1%`) liberi
+  nello slot;
 - generazione automatica e inclusione degli asset web nel binario;
 - test Node.js del simulatore REST e delle regole di configurazione;
 - 20 test Node.js superati su API, segreti, calibrazione, storico, filtri,
