@@ -56,7 +56,7 @@ documentazione hardware.
 | **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD |
 | **Autodiagnosi** | Test di sensori, microSD, batteria, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore per sensore |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
-| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `Laveggio-PW-casklogic` |
+| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `LP-PW_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
 | **Aggiornamenti** | OTA firmato ECDSA-P256, doppia partizione, validazione al riavvio, rollback e registro degli esiti |
 
@@ -207,10 +207,10 @@ Artefatti principali:
   <img alt="ECDSA signed OTA" src="https://img.shields.io/badge/OTA-ECDSA--P256_signed-16875b?style=flat-square&logo=letsencrypt&logoColor=white">
   <img alt="TLS" src="https://img.shields.io/badge/backend-TLS_%2F_mTLS-28678e?style=flat-square&logo=openssl&logoColor=white">
   <img alt="HMAC SHA256" src="https://img.shields.io/badge/events-HMAC--SHA256-5b677a?style=flat-square&logo=databricks&logoColor=white">
-  <img alt="HTTP Digest" src="https://img.shields.io/badge/portal-HTTP_Digest-c98b2e?style=flat-square&logo=auth0&logoColor=white">
+  <img alt="HTTP Basic" src="https://img.shields.io/badge/portal-HTTP_Basic-c98b2e?style=flat-square&logo=auth0&logoColor=white">
 </p>
 
-- autenticazione HTTP Digest, rate limit, CSRF e header browser restrittivi;
+- autenticazione HTTP Basic, rate limit, CSRF e header browser restrittivi;
 - endpoint remoti esclusivamente TLS con CA obbligatoria e mTLS opzionale;
 - segreto HMAC distinto per la firma delle pesate;
 - token dedicato per `GET /api/metrics`;

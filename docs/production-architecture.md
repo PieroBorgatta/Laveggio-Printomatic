@@ -112,7 +112,7 @@ di trasmissione. Il backend deve includere:
 - nessuna persistenza automatica del lordo/tara senza conferma dell'operatore.
 
 Il portale locale resta HTTP ed e destinato a una VLAN tecnica amministrata
-dall'access point, con ACL che ne limitino l'accesso. Autenticazione Digest,
+dall'access point, con ACL che ne limitino l'accesso. Autenticazione Basic,
 rate limit, CSRF e header restrittivi riducono il rischio applicativo ma non
 sostituiscono la cifratura del trasporto. Dettagli in
 [`security.md`](security.md).

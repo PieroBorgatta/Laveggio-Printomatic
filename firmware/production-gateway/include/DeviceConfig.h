@@ -36,9 +36,9 @@ struct DeviceConfig {
   bool mqttCommandsEnabled = false;
   String ntpServer = "pool.ntp.org";
   String timezone = "CET-1CEST,M3.5.0,M10.5.0/3";
-  String adminUser = "info@casklogic.com";
+  String adminUser = "admin";
   String adminPassword;
-  bool displayDefaultOn = false;
+  bool displayDefaultOn = true;
   bool powerSenseEnabled = false;
   bool powerSenseActiveHigh = true;
   uint32_t stableWindowMs = 600;
@@ -69,6 +69,7 @@ class ConfigStore {
   bool saveRemoteConfigVersion();
   bool saveCalibration(uint8_t channel);
   bool clearCalibration(uint8_t channel);
+  bool factoryReset();
   bool isProvisioned() const { return !config_.wifiSsid.isEmpty(); }
 
  private:

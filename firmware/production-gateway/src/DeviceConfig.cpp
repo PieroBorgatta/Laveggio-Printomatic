@@ -2,6 +2,12 @@
 
 namespace {
 
+constexpr char kDefaultAdminUser[] = "admin";
+constexpr char kDefaultAdminPassword[] = "casklogic";
+constexpr char kLegacyDefaultAdminUser[] = "info@casklogic.com";
+constexpr char kLegacyDefaultAdminPassword[] = "Presario41740+";
+constexpr uint8_t kAdminCredentialRevision = 2;
+
 String calibrationKey(uint8_t channel, uint8_t position) {
   return String("c") + channel + "p" + position;
 }
@@ -45,9 +51,19 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.mqttCommandsEnabled = preferences_.getBool("mqtt_cmd", false);
   config_.ntpServer = preferences_.getString("ntp", "pool.ntp.org");
   config_.timezone = preferences_.getString("timezone", "CET-1CEST,M3.5.0,M10.5.0/3");
-  config_.adminUser = preferences_.getString("admin_user", "info@casklogic.com");
-  config_.adminPassword = preferences_.getString("admin_pass", "Presario41740+");
-  config_.displayDefaultOn = preferences_.getBool("display_on", false);
+  config_.adminUser = preferences_.getString("admin_user", kDefaultAdminUser);
+  config_.adminPassword = preferences_.getString("admin_pass", kDefaultAdminPassword);
+  const uint8_t credentialRevision = preferences_.getUChar("auth_rev", 0);
+  if (credentialRevision < kAdminCredentialRevision ||
+      (config_.adminUser == kLegacyDefaultAdminUser &&
+       config_.adminPassword == kLegacyDefaultAdminPassword)) {
+    config_.adminUser = kDefaultAdminUser;
+    config_.adminPassword = kDefaultAdminPassword;
+    preferences_.putString("admin_user", config_.adminUser);
+    preferences_.putString("admin_pass", config_.adminPassword);
+    preferences_.putUChar("auth_rev", kAdminCredentialRevision);
+  }
+  config_.displayDefaultOn = preferences_.getBool("display_on", true);
   config_.powerSenseEnabled = preferences_.getBool("pwr_sense", false);
   config_.powerSenseActiveHigh = preferences_.getBool("pwr_high", true);
   config_.stableWindowMs = preferences_.getUInt("stable_ms", 600);
@@ -188,4 +204,8 @@ bool ConfigStore::clearCalibration(uint8_t channel) {
     config_.calibrations[channel].points[position] = {};
   }
   return saveCalibration(channel);
+}
+
+bool ConfigStore::factoryReset() {
+  return preferences_.clear();
 }

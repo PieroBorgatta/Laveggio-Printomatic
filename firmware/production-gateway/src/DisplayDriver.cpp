@@ -30,6 +30,8 @@ constexpr uint16_t kRed = 0xC249;
 const uint8_t *glyphFor(char value) {
   static const uint8_t blank[5] = {0, 0, 0, 0, 0};
   static const uint8_t dash[5] = {0x08, 0x08, 0x08, 0x08, 0x08};
+  static const uint8_t dot[5] = {0x00, 0x60, 0x60, 0x00, 0x00};
+  static const uint8_t underscore[5] = {0x40, 0x40, 0x40, 0x40, 0x40};
   static const uint8_t digits[10][5] = {
     {0x3E, 0x51, 0x49, 0x45, 0x3E}, {0x00, 0x42, 0x7F, 0x40, 0x00},
     {0x42, 0x61, 0x51, 0x49, 0x46}, {0x21, 0x41, 0x45, 0x4B, 0x31},
@@ -55,6 +57,8 @@ const uint8_t *glyphFor(char value) {
   if (value >= '0' && value <= '9') return digits[value - '0'];
   if (value >= 'A' && value <= 'Z') return letters[value - 'A'];
   if (value == '-') return dash;
+  if (value == '.') return dot;
+  if (value == '_') return underscore;
   return blank;
 }
 
@@ -198,13 +202,75 @@ void DisplayDriver::setEnabled(bool enabled) {
   }
 }
 
+void DisplayDriver::drawWrappedText(
+  int x,
+  int y,
+  const String &text,
+  uint8_t maxRows,
+  uint16_t color
+) {
+  String normalized = text;
+  normalized.toUpperCase();
+  constexpr size_t kCharactersPerRow = 26;
+  for (uint8_t row = 0; row < maxRows; ++row) {
+    const size_t start = row * kCharactersPerRow;
+    if (start >= normalized.length()) break;
+    const String line = normalized.substring(start, start + kCharactersPerRow);
+    drawText(x, y + row * 11, line.c_str(), 1, color, kNavy);
+  }
+}
+
+void DisplayDriver::showNetworkInfo(
+  const String &ssid,
+  const String &wifiPassword,
+  const String &ipAddress,
+  const String &adminUser,
+  const String &adminPassword
+) {
+  if (!enabled_) return;
+  networkInfoUntilMs_ = millis() + 30000;
+  fillRect(0, 0, kWidth, kHeight, kNavy);
+  fillRect(0, 0, kWidth, 30, kBlue);
+  drawText(8, 7, "CASKLOGIC", 2, kWhite, kBlue);
+  drawText(8, 42, "RETE WIFI", 2, kMuted, kNavy);
+  drawWrappedText(8, 66, ssid, 2, kWhite);
+  drawText(8, 96, "PASSWORD WIFI", 1, kMuted, kNavy);
+  drawWrappedText(8, 110, wifiPassword.isEmpty() ? "NON VISUALIZZATA" : wifiPassword, 1, kGreen);
+  drawText(8, 136, "INDIRIZZO", 1, kMuted, kNavy);
+  drawWrappedText(8, 150, ipAddress, 1, kWhite);
+  drawText(8, 178, "ACCESSO WEB", 2, kMuted, kNavy);
+  drawText(8, 204, "UTENTE", 1, kMuted, kNavy);
+  drawWrappedText(64, 204, adminUser, 1, kGreen);
+  drawText(8, 226, "PASSWORD", 1, kMuted, kNavy);
+  drawWrappedText(64, 226, adminPassword, 1, kGreen);
+  drawText(8, 260, "APRI NEL BROWSER", 1, kMuted, kNavy);
+  drawWrappedText(8, 276, String("HTTP ") + ipAddress, 2, kWhite);
+}
+
+void DisplayDriver::showFactoryReset() {
+  if (!enabled_) return;
+  networkInfoUntilMs_ = millis() + 3600000UL;
+  fillRect(0, 0, kWidth, kHeight, kNavy);
+  fillRect(0, 0, kWidth, 30, kRed);
+  drawText(8, 7, "CASKLOGIC", 2, kWhite, kRed);
+  drawText(8, 84, "RIPRISTINO", 2, kWhite, kNavy);
+  drawText(8, 112, "CONFIGURAZIONE", 2, kWhite, kNavy);
+  drawText(8, 166, "RILASCIA BOOT", 2, kAmber, kNavy);
+  drawText(8, 194, "PER RIAVVIARE", 2, kMuted, kNavy);
+}
+
 void DisplayDriver::render(
   const laveggio::SensorReading readings[laveggio::kChannelCount],
   const laveggio::WeightSnapshot &snapshot,
   bool wifiConnected,
   bool sdReady
 ) {
-  if (!enabled_ || millis() - lastRenderMs_ < 120) return;
+  if (!enabled_ || static_cast<int32_t>(networkInfoUntilMs_ - millis()) > 0 ||
+      millis() - lastRenderMs_ < 120) return;
+  if (networkInfoUntilMs_ != 0) {
+    networkInfoUntilMs_ = 0;
+    drawFrame();
+  }
   lastRenderMs_ = millis();
 
   if (snapshot.weightKg != lastWeightKg_ || snapshot.valid != lastValid_) {

@@ -18,7 +18,7 @@ La VLAN non e un parametro che una stazione Wi-Fi ESP32 possa imporre: il tag
 
 ## Protezioni del portale
 
-- autenticazione HTTP Digest anche durante il primo provisioning;
+- autenticazione HTTP Basic anche durante il primo provisioning;
 - blocco per 60 secondi dopo cinque credenziali errate;
 - token CSRF casuale per ogni avvio su tutte le richieste che modificano dati;
 - Content Security Policy, divieto di framing, `nosniff`, referrer e permessi
@@ -26,15 +26,15 @@ La VLAN non e un parametro che una stazione Wi-Fi ESP32 possa imporre: il tag
 - nessun CORS e nessuna stampa seriale della password amministrativa;
 - asset statici, API, log, export e OTA protetti dalla stessa autenticazione.
 
-Le credenziali iniziali richieste sono `info@casklogic.com` e
-`Presario41740+`. Sono credenziali di bootstrap note nel firmware: devono
+Le credenziali iniziali richieste sono `admin` e `casklogic`. Sono credenziali
+di bootstrap note nel firmware: devono
 essere sostituite dalla pagina Sistema prima dell'uso operativo.
 
-Digest evita di inviare la password in chiaro, ma non cifra il contenuto della
-sessione. Un portale HTTPS locale richiede la sostituzione del `WebServer`
+Basic invia le credenziali codificate Base64 ma non cifrate: il portale deve
+restare su AP/VLAN tecnica e non essere esposto su reti non fidate. Un portale HTTPS locale richiede la sostituzione del `WebServer`
 Arduino con `esp_https_server`, oltre alla gestione sicura del certificato e
 della chiave del dispositivo. Questa migrazione non e implementata nella
-versione 1.2.0. Riferimento ufficiale:
+versione 1.2.1. Riferimento ufficiale:
 <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/protocols/esp_https_server.html>.
 
 ## Collegamento a CaskLogic

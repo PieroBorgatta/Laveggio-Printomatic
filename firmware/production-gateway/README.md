@@ -15,7 +15,7 @@ eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 - sincronizzazione NTP richiesta subito dopo il Wi-Fi e completata senza
   bloccare l'avvio o la lettura dei sensori;
 - Wi-Fi DHCP o statico, scansione reti e access point di recupero;
-- autenticazione HTTP Digest, rate limit, CSRF e header browser restrittivi;
+- autenticazione HTTP Basic, rate limit, CSRF e header browser restrittivi;
 - invio asincrono HTTPS e MQTT TLS opzionale verso il futuro backend CaskLogic;
 - firma HMAC-SHA256 delle pesate, endpoint Prometheus e configurazione remota
   versionata con whitelist e copia locale valida;
@@ -93,7 +93,7 @@ sezioni dell'interfaccia senza la scheda collegata.
 
 Se non trova credenziali Wi-Fi salvate, il dispositivo crea:
 
-- SSID `Laveggio-PW-casklogic`;
+- SSID `LP-PW_casklogic-192_168_4_1`;
 - password `casklogic`;
 - indirizzo `http://192.168.4.1`.
 
@@ -101,8 +101,8 @@ Lo stesso access point viene attivato se la rete configurata non e raggiungibile
 Il dispositivo continua a tentare la riconnessione e spegne automaticamente
 l'access point dopo 120 secondi consecutivi di connessione stabile alla rete
 principale. Durante il primo provisioning l'interfaccia e raggiungibile dalla
-rete creata dal dispositivo e richiede gia l'utente `info@casklogic.com` e la
-password iniziale `Presario41740+`. Le stesse credenziali proteggono il portale
+rete creata dal dispositivo e richiede gia l'utente `admin` e la password
+iniziale `casklogic`. Le stesse credenziali proteggono il portale
 dopo il salvataggio del Wi-Fi. La password non viene stampata sulla seriale e
 va cambiata dalla sezione Sistema prima dell'uso operativo.
 

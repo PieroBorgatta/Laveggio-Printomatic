@@ -35,7 +35,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.2.0";
+constexpr char kFirmwareVersion[] = "1.2.5";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdCs = 4;
 constexpr uint8_t kI2cSda = 1;
@@ -43,6 +43,8 @@ constexpr uint8_t kI2cScl = 2;
 constexpr uint8_t kMuxReset = 3;
 constexpr uint8_t kPowerSensePin = 20;
 constexpr uint8_t kBatterySensePin = 0;
+constexpr uint8_t kFactoryResetButtonPin = 9;
+constexpr uint32_t kFactoryResetHoldMs = 10000;
 constexpr uint32_t kSensorIntervalMs = 20;
 constexpr uint32_t kHealthIntervalMs = 250;
 constexpr uint32_t kReconnectIntervalMs = 15000;
@@ -54,8 +56,10 @@ constexpr uint32_t kTimeSyncRetryIntervalMs = 15000;
 constexpr uint32_t kRetentionIntervalMs = 86400000UL;
 constexpr uint32_t kAuthBlockMs = 60000;
 constexpr uint8_t kAuthFailureLimit = 5;
-constexpr char kRescueSsid[] = "Laveggio-PW-casklogic";
+constexpr char kRescueSsid[] = "LP-PW_casklogic-192_168_4_1";
 constexpr char kRescuePassword[] = "casklogic";
+constexpr char kAuthRealm[] = "Laveggio Printomatic v3";
+static_assert(sizeof(kRescueSsid) - 1 <= 32, "Rescue SSID exceeds the Wi-Fi limit");
 
 struct OutboundMessage {
   char url[256];
@@ -78,6 +82,14 @@ struct SensorErrorCounters {
   String lastErrorAt;
 };
 
+struct CachedWifiNetwork {
+  String ssid;
+  int32_t rssi = 0;
+  bool secure = false;
+};
+
+constexpr uint8_t kMaxCachedWifiNetworks = 16;
+
 struct SdHealthState {
   bool lastCheckOk = false;
   uint32_t checks = 0;
@@ -99,6 +111,8 @@ laveggio::WeightSnapshot currentSnapshot;
 QueueHandle_t outboundQueue = nullptr;
 SensorErrorCounters sensorErrors[laveggio::kChannelCount];
 SdHealthState sdHealth;
+CachedWifiNetwork cachedWifiNetworks[kMaxCachedWifiNetworks];
+uint8_t cachedWifiNetworkCount = 0;
 
 String deviceSuffix;
 String bootId;
@@ -129,6 +143,7 @@ uint32_t lastSensorReadMs = 0;
 uint32_t lastHealthReadMs = 0;
 uint32_t lastScanCounterMs = 0;
 uint32_t lastReconnectMs = 0;
+uint32_t lastNetworkStatusMs = 0;
 uint32_t lastHeartbeatMs = 0;
 uint32_t lastDiagnosticLogMs = 0;
 uint32_t lastSdCheckMs = 0;
@@ -138,6 +153,8 @@ uint32_t lastConfigSyncMs = 0;
 uint32_t lastRetentionMs = 0;
 uint32_t stationConnectedSinceMs = 0;
 uint32_t scheduledRestartMs = 0;
+uint32_t factoryResetPressedSinceMs = 0;
+bool factoryResetTriggered = false;
 uint32_t authBlockedUntilMs = 0;
 String csrfToken;
 String lastHeartbeatAckAt;
@@ -180,6 +197,10 @@ String boolJson(bool value) {
 
 bool parseBool(const String &value) {
   return value == "true" || value == "1" || value == "on";
+}
+
+bool parseIpAddress(const String &value, IPAddress &address) {
+  return !value.isEmpty() && address.fromString(value);
 }
 
 String timestampIso() {
@@ -439,6 +460,7 @@ void recordSensorDiagnostics() {
     line,
     configStore.get().systemLogFileMaxMb * 1024UL * 1024UL
   );
+  Serial.println(line);
 }
 
 String readTailText(const String &path, size_t maxBytes) {
@@ -615,6 +637,20 @@ void scanSensors() {
       continue;
     }
     delayMicroseconds(450);
+    if (!i2cProbe(kAs5600Address)) {
+      sensorReadings[channel].present = false;
+      ++sensorErrors[channel].readFailures;
+      if (healthDue) {
+        ++sensorErrors[channel].missingSamples;
+        sensorErrors[channel].lastErrorAt = timestampIso();
+        if (sensorErrors[channel].stateInitialized && sensorErrors[channel].previouslyHealthy) {
+          ++sensorErrors[channel].unhealthyTransitions;
+        }
+        sensorErrors[channel].stateInitialized = true;
+        sensorErrors[channel].previouslyHealthy = false;
+      }
+      continue;
+    }
     uint8_t angle[2] = {0, 0};
     if (!readAs5600(0x0C, angle, 2)) {
       sensorReadings[channel].present = false;
@@ -1091,6 +1127,51 @@ void startRescueAccessPoint() {
   }
 }
 
+void refreshWifiScanCache() {
+  cachedWifiNetworkCount = 0;
+  if (accessPointActive) return;
+
+  WiFi.mode(WIFI_STA);
+  const int found = WiFi.scanNetworks(false, true);
+  if (found <= 0) {
+    WiFi.scanDelete();
+    return;
+  }
+
+  for (int index = 0; index < found && cachedWifiNetworkCount < kMaxCachedWifiNetworks; ++index) {
+    const String ssid = WiFi.SSID(index);
+    if (ssid.isEmpty()) continue;
+    bool duplicate = false;
+    for (uint8_t cached = 0; cached < cachedWifiNetworkCount; ++cached) {
+      if (cachedWifiNetworks[cached].ssid != ssid) continue;
+      duplicate = true;
+      if (WiFi.RSSI(index) > cachedWifiNetworks[cached].rssi) {
+        cachedWifiNetworks[cached].rssi = WiFi.RSSI(index);
+        cachedWifiNetworks[cached].secure = WiFi.encryptionType(index) != WIFI_AUTH_OPEN;
+      }
+      break;
+    }
+    if (duplicate) continue;
+    CachedWifiNetwork &network = cachedWifiNetworks[cachedWifiNetworkCount++];
+    network.ssid = ssid;
+    network.rssi = WiFi.RSSI(index);
+    network.secure = WiFi.encryptionType(index) != WIFI_AUTH_OPEN;
+  }
+  WiFi.scanDelete();
+}
+
+String cachedWifiScanJson() {
+  String json = "{\"scanning\":false,\"cached\":true,\"networks\":[";
+  for (uint8_t index = 0; index < cachedWifiNetworkCount; ++index) {
+    if (index) json += ',';
+    json += "{\"ssid\":" + quoted(cachedWifiNetworks[index].ssid);
+    json += ",\"rssi\":" + String(cachedWifiNetworks[index].rssi);
+    json += ",\"secure\":" + boolJson(cachedWifiNetworks[index].secure) + "}";
+  }
+  json += "]}";
+  return json;
+}
+
 void maintainRescueAccessPoint(uint32_t now) {
   if (WiFi.status() != WL_CONNECTED) {
     stationConnectedSinceMs = 0;
@@ -1119,6 +1200,7 @@ void connectNetwork() {
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(config.hostname.c_str());
   if (config.wifiSsid.isEmpty()) {
+    refreshWifiScanCache();
     startRescueAccessPoint();
     return;
   }
@@ -1132,8 +1214,50 @@ void connectNetwork() {
     if (MDNS.begin(config.hostname.c_str())) MDNS.addService("http", "tcp", 80);
     logSystem("info", "wifi_connected", WiFi.localIP().toString());
   } else {
+    WiFi.disconnect(false, false);
+    refreshWifiScanCache();
     startRescueAccessPoint();
   }
+}
+
+void printNetworkStatus() {
+  const bool connected = WiFi.status() == WL_CONNECTED;
+  const String stationIp = connected ? WiFi.localIP().toString() : "-";
+  const String gatewayIp = connected ? WiFi.gatewayIP().toString() : "-";
+  const String rescueIp = accessPointActive ? WiFi.softAPIP().toString() : "-";
+  Serial.printf(
+    "Network: station=%s ssid=%s ip=%s gateway=%s mode=%s rescue_ap=%s ap_ip=%s\n",
+    connected ? "connected" : "disconnected",
+    connected ? WiFi.SSID().c_str() : configStore.get().wifiSsid.c_str(),
+    stationIp.c_str(),
+    gatewayIp.c_str(),
+    configStore.get().useDhcp ? "DHCP" : "static",
+    accessPointActive ? "active" : "inactive",
+    rescueIp.c_str()
+  );
+}
+
+void checkFactoryResetButton(uint32_t now) {
+  const bool pressed = digitalRead(kFactoryResetButtonPin) == LOW;
+  if (!pressed) {
+    factoryResetPressedSinceMs = 0;
+    if (!factoryResetTriggered) return;
+    delay(150);
+    ESP.restart();
+    return;
+  }
+  if (factoryResetTriggered) return;
+  if (factoryResetPressedSinceMs == 0) {
+    factoryResetPressedSinceMs = now;
+    return;
+  }
+  if (now - factoryResetPressedSinceMs < kFactoryResetHoldMs) return;
+
+  factoryResetTriggered = true;
+  logSystem("warning", "factory_reset", "boot_button_held_ms=" + String(kFactoryResetHoldMs));
+  const bool resetOk = configStore.factoryReset();
+  Serial.printf("Factory reset: %s; release BOOT to restart\n", resetOk ? "completed" : "failed");
+  display.showFactoryReset();
 }
 
 void sendSecurityHeaders() {
@@ -1184,7 +1308,7 @@ bool authorized() {
       logSystem("warning", "web_auth_rate_limited");
     }
   }
-  webServer.requestAuthentication(DIGEST_AUTH, "Laveggio Printomatic");
+  webServer.requestAuthentication(BASIC_AUTH, kAuthRealm);
   return false;
 }
 
@@ -1300,12 +1424,12 @@ String buildStatusJson() {
   json += ",\"current_sensor_configured\":false";
   json += ",\"current_ma\":null";
   json += ",\"chip_temperature_c\":" + String(temperatureRead(), 1) + "}";
-  json += ",\"security\":{\"portal_auth\":\"digest\",\"portal_https\":false";
+  json += ",\"security\":{\"portal_auth\":\"basic\",\"portal_https\":false";
   json += ",\"csrf_protected\":true,\"rate_limit_enabled\":true";
   json += ",\"ota_signature_required\":true,\"ota_signature_algorithm\":\"ECDSA-P256-SHA256\"";
   json += ",\"ota_rollback_enabled\":true";
   json += ",\"default_credentials_active\":" + boolJson(
-    config.adminUser == "info@casklogic.com" && config.adminPassword == "Presario41740+"
+    config.adminUser == "admin" && config.adminPassword == "casklogic"
   );
   json += ",\"vlan_managed_by_network\":true}";
   json += ",\"snapshot\":{\"valid\":" + boolJson(currentSnapshot.valid);
@@ -1492,11 +1616,19 @@ String diagnosticTestJson(const char *id, const char *label, const String &statu
 String buildDiagnosticsJson(bool active) {
   const DeviceConfig &config = configStore.get();
   String tests[7];
+  uint8_t presentSensors = 0;
   uint8_t healthySensors = 0;
-  for (const laveggio::SensorReading &reading : sensorReadings) if (reading.healthy()) ++healthySensors;
+  for (const laveggio::SensorReading &reading : sensorReadings) {
+    if (reading.present) ++presentSensors;
+    if (reading.healthy()) ++healthySensors;
+  }
+  const String sensorStatus = presentSensors < laveggio::kChannelCount
+    ? "fail"
+    : (healthySensors == laveggio::kChannelCount ? "pass" : "warn");
   tests[0] = diagnosticTestJson(
-    "sensors", "Sensori AS5600", healthySensors == laveggio::kChannelCount ? "pass" : "fail",
-    String(healthySensors) + "/" + String(laveggio::kChannelCount) + " regolari"
+    "sensors", "Sensori AS5600", sensorStatus,
+    String(presentSensors) + "/" + String(laveggio::kChannelCount) + " rilevati; " +
+      String(healthySensors) + "/" + String(laveggio::kChannelCount) + " con magnete regolare"
   );
   if (active) runSdHealthCheck();
   tests[1] = diagnosticTestJson(
@@ -2125,10 +2257,20 @@ void registerWebRoutes() {
       sendError(400, "SSID o password Wi-Fi oltre i limiti consentiti");
       return;
     }
+    const bool useDhcp = parseBool(webServer.arg("use_dhcp"));
+    IPAddress staticIp, gateway, subnet, dns;
+    if (!useDhcp &&
+        (!parseIpAddress(webServer.arg("static_ip"), staticIp) ||
+         !parseIpAddress(webServer.arg("gateway"), gateway) ||
+         !parseIpAddress(webServer.arg("subnet"), subnet) ||
+         !parseIpAddress(webServer.arg("dns"), dns))) {
+      sendError(400, "IP statico, gateway, subnet o DNS non validi");
+      return;
+    }
     DeviceConfig &config = configStore.mutableConfig();
     config.wifiSsid = ssid;
     if (!password.isEmpty()) config.wifiPassword = password;
-    config.useDhcp = parseBool(webServer.arg("use_dhcp"));
+    config.useDhcp = useDhcp;
     config.staticIp = webServer.arg("static_ip");
     config.gateway = webServer.arg("gateway");
     config.subnet = webServer.arg("subnet");
@@ -2292,6 +2434,10 @@ void registerWebRoutes() {
 
   webServer.on("/api/wifi/scan", HTTP_GET, [] {
     if (!authorized()) return;
+    if (accessPointActive) {
+      sendJson(cachedWifiScanJson());
+      return;
+    }
     int count = WiFi.scanComplete();
     if (count == WIFI_SCAN_FAILED) {
       WiFi.scanNetworks(true, true);
@@ -2475,6 +2621,7 @@ void setup() {
   digitalWrite(kMuxReset, HIGH);
   pinMode(kPowerSensePin, INPUT);
   pinMode(kBatterySensePin, INPUT);
+  pinMode(kFactoryResetButtonPin, INPUT_PULLUP);
   analogReadResolution(12);
   Wire.begin(kI2cSda, kI2cScl, 100000);
   Wire.setTimeOut(20);
@@ -2496,6 +2643,15 @@ void setup() {
   mqttClient.setKeepAlive(30);
   mqttClient.setSocketTimeout(3);
   connectNetwork();
+  printNetworkStatus();
+  const bool showingRescueNetwork = accessPointActive;
+  display.showNetworkInfo(
+    showingRescueNetwork ? kRescueSsid : configStore.get().wifiSsid,
+    showingRescueNetwork ? kRescuePassword : "",
+    showingRescueNetwork ? WiFi.softAPIP().toString() : WiFi.localIP().toString(),
+    configStore.get().adminUser,
+    configStore.get().adminPassword
+  );
   registerWebRoutes();
   runSdHealthCheck();
   logSystem("info", "device_started", "firmware=" + String(kFirmwareVersion));
@@ -2509,6 +2665,7 @@ void setup() {
 
 void loop() {
   const uint32_t now = millis();
+  checkFactoryResetButton(now);
   dnsServer.processNextRequest();
   webServer.handleClient();
   maintainRescueAccessPoint(now);
@@ -2567,6 +2724,11 @@ void loop() {
     lastReconnectMs = now;
     if (!configStore.get().wifiSsid.isEmpty()) WiFi.reconnect();
     if (!accessPointActive) startRescueAccessPoint();
+  }
+
+  if (now - lastNetworkStatusMs >= kDiagnosticLogIntervalMs) {
+    lastNetworkStatusMs = now;
+    printNetworkStatus();
   }
 
   if (scheduledRestartMs != 0 && static_cast<int32_t>(now - scheduledRestartMs) >= 0) {
