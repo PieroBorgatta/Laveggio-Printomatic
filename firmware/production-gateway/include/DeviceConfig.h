@@ -65,6 +65,7 @@ class ConfigStore {
   const DeviceConfig &get() const { return config_; }
   DeviceConfig &mutableConfig() { return config_; }
   bool saveSettings();
+  bool saveDisplayDefaultOn();
   bool saveHeartbeatRestartSuppressed();
   bool saveRemoteConfigVersion();
   bool saveCalibration(uint8_t channel);

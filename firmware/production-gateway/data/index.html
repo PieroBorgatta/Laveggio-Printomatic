@@ -197,10 +197,10 @@
           <div class="panel form-panel">
             <div class="panel-heading"><div><p class="eyebrow">Manutenzione</p><h2>Firmware e diagnostica</h2></div></div>
             <dl class="details" id="system-details"></dl>
-            <form id="ota-form" class="upload-box"><label><span>Firmware firmato</span><input name="firmware" type="file" accept=".signed.bin" required><small>Accetta esclusivamente immagini ECDSA-P256 prodotte da CaskLogic</small></label><button class="button secondary" type="submit">Carica firmware</button></form>
+            <form id="ota-form" class="upload-box"><label><span>Firmware firmato</span><input name="firmware" type="file" accept=".signed.bin" required><small>Seleziona il file CaskLogic .signed.bin. Il dispositivo verifica la firma, installa l'aggiornamento e si riavvia automaticamente.</small></label><button class="button secondary" id="ota-submit" type="submit">Installa aggiornamento</button><div class="ota-progress" id="ota-progress" aria-live="polite" hidden><div><strong id="ota-status">Pronto</strong><span id="ota-percent">0%</span></div><progress id="ota-progress-bar" max="100" value="0"></progress><small id="ota-detail">Nessun aggiornamento in corso</small></div></form>
             <div class="log-box" id="system-log">Caricamento diagnostica...</div>
             <a class="button secondary" href="/api/logs/export" download>Esporta log completi</a>
-            <div class="reset-procedure"><strong>Ripristino fisico</strong><p>Con il dispositivo acceso, tenere premuto il solo tasto BOOT per 10 secondi, quindi rilasciarlo. La configurazione, le credenziali e le calibrazioni vengono azzerate; storico e log sulla microSD restano conservati.</p></div>
+            <div class="reset-procedure"><strong>Tasti del dispositivo</strong><p>Premere brevemente BOOT per cambiare schermata sul display. Per il ripristino, tenere premuto BOOT per 10 secondi seguendo barra e conto alla rovescia, quindi rilasciarlo. Configurazione, credenziali e calibrazioni vengono azzerate; storico e log sulla microSD restano conservati. Il tasto RESET riavvia soltanto il dispositivo.</p></div>
             <button class="button danger" type="button" id="restart-device">Riavvia dispositivo</button>
           </div>
           <div class="panel form-panel">

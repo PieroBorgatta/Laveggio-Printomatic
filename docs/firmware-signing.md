@@ -1,6 +1,6 @@
 # Firma e rilascio firmware
 
-Il portale OTA della versione 1.2.0 accetta soltanto immagini
+Il portale OTA, dalla versione 1.2.0, accetta soltanto immagini
 `firmware.signed.bin` firmate ECDSA-P256 con SHA-256. La chiave pubblica e
 incorporata in `include/OtaPublicKey.h`; la chiave privata non deve mai entrare
 nel repository, nel dispositivo o nel pacchetto assistenza.
@@ -42,6 +42,13 @@ richiesto da `Update.installSignature()`. Il firmware verifica firma e
 dimensione prima di selezionare la nuova partizione. Al primo avvio esegue i
 controlli minimi e marca l'immagine valida; in caso contrario richiede il
 rollback. Ogni tentativo viene registrato in `/updates/registry.ndjson`.
+
+Dal portale, la selezione del file e l'unica operazione manuale. Il browser
+trasmette blocchi ordinati da 12 KiB, verificati per offset e completezza, cosi
+anche una rete debole non dipende da una singola richiesta HTTP molto lunga.
+Dopo la conferma vengono mostrati avanzamento, verifica della firma, riavvio
+automatico e versione effettivamente tornata online. Un errore resta visibile
+nel pannello senza essere affidato soltanto a una notifica temporanea.
 
 Questa protezione impedisce l'installazione dal portale di un binario non
 firmato. Non protegge da un attaccante con accesso fisico alla flash finche non

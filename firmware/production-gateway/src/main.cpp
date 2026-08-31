@@ -17,6 +17,7 @@
 #include <Wire.h>
 #include <esp_system.h>
 #include <esp_ota_ops.h>
+#include <mbedtls/base64.h>
 #include <mbedtls/md.h>
 #include <time.h>
 #include <algorithm>
@@ -35,7 +36,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.2.5";
+constexpr char kFirmwareVersion[] = "1.3.0";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdCs = 4;
 constexpr uint8_t kI2cSda = 1;
@@ -45,6 +46,8 @@ constexpr uint8_t kPowerSensePin = 20;
 constexpr uint8_t kBatterySensePin = 0;
 constexpr uint8_t kFactoryResetButtonPin = 9;
 constexpr uint32_t kFactoryResetHoldMs = 10000;
+constexpr uint32_t kFactoryResetFeedbackDelayMs = 600;
+constexpr uint32_t kButtonDebounceMs = 40;
 constexpr uint32_t kSensorIntervalMs = 20;
 constexpr uint32_t kHealthIntervalMs = 250;
 constexpr uint32_t kReconnectIntervalMs = 15000;
@@ -123,6 +126,8 @@ bool displayOn = false;
 bool integrationLastOk = false;
 bool otaSucceeded = false;
 bool otaSignatureVerified = false;
+bool otaUploadAuthorized = false;
+bool otaChunkUploadActive = false;
 bool timeSynchronized = false;
 bool mqttLastConnected = false;
 bool configSyncLastOk = false;
@@ -164,6 +169,8 @@ String lastConfigSyncError;
 String otaTargetLabel;
 String otaPreviousVersion;
 String otaErrorDetail;
+size_t otaExpectedBytes = 0;
+size_t otaReceivedBytes = 0;
 UpdaterECDSAVerifier otaVerifier(PUBLIC_KEY, PUBLIC_KEY_LEN, HASH_SHA256);
 bool configSyncAttemptedThisBoot = false;
 
@@ -565,6 +572,41 @@ void recordFirmwareUpdate(const String &outcome, const String &target, const Str
   if (!detail.isEmpty()) line += ",\"detail\":" + quoted(detail);
   line += "}";
   appendLine("/updates/registry.ndjson", line, 4UL * 1024UL * 1024UL);
+}
+
+bool beginSignedOta(size_t signedSize, const String &target) {
+  if (Update.isRunning()) Update.abort();
+  otaSucceeded = false;
+  otaSignatureVerified = false;
+  otaErrorDetail = "";
+  otaPreviousVersion = kFirmwareVersion;
+  otaTargetLabel = target;
+  otaExpectedBytes = signedSize;
+  otaReceivedBytes = 0;
+  if (signedSize <= 512) {
+    otaErrorDetail = "Dimensione firmware firmato mancante o non valida";
+    return false;
+  }
+  if (!Update.installSignature(&otaVerifier)) {
+    otaErrorDetail = "Impossibile inizializzare la verifica ECDSA";
+    return false;
+  }
+  if (!Update.begin(signedSize)) {
+    otaErrorDetail = Update.errorString();
+    Update.printError(Serial);
+    return false;
+  }
+  recordFirmwareUpdate("started", otaTargetLabel, "signed_bytes=" + String(signedSize));
+  return true;
+}
+
+bool finishSignedOta() {
+  otaSucceeded = Update.isRunning() && otaReceivedBytes == otaExpectedBytes && Update.end();
+  otaSignatureVerified = otaSucceeded;
+  if (!otaSucceeded && otaErrorDetail.isEmpty()) otaErrorDetail = Update.errorString();
+  recordFirmwareUpdate(otaSucceeded ? "verified" : "failed", otaTargetLabel, otaErrorDetail);
+  logSystem(otaSucceeded ? "info" : "error", otaSucceeded ? "ota_complete" : "ota_failed");
+  return otaSucceeded;
 }
 
 void pruneExpiredArchives() {
@@ -1240,8 +1282,13 @@ void printNetworkStatus() {
 void checkFactoryResetButton(uint32_t now) {
   const bool pressed = digitalRead(kFactoryResetButtonPin) == LOW;
   if (!pressed) {
+    const uint32_t heldMs = factoryResetPressedSinceMs == 0 ? 0 : now - factoryResetPressedSinceMs;
     factoryResetPressedSinceMs = 0;
-    if (!factoryResetTriggered) return;
+    if (!factoryResetTriggered) {
+      if (heldMs >= kFactoryResetFeedbackDelayMs) display.cancelFactoryResetProgress();
+      else if (heldMs >= kButtonDebounceMs) display.nextPage();
+      return;
+    }
     delay(150);
     ESP.restart();
     return;
@@ -1251,7 +1298,11 @@ void checkFactoryResetButton(uint32_t now) {
     factoryResetPressedSinceMs = now;
     return;
   }
-  if (now - factoryResetPressedSinceMs < kFactoryResetHoldMs) return;
+  const uint32_t heldMs = now - factoryResetPressedSinceMs;
+  if (heldMs >= kFactoryResetFeedbackDelayMs) {
+    display.showFactoryResetProgress(heldMs, kFactoryResetHoldMs);
+  }
+  if (heldMs < kFactoryResetHoldMs) return;
 
   factoryResetTriggered = true;
   logSystem("warning", "factory_reset", "boot_button_held_ms=" + String(kFactoryResetHoldMs));
@@ -2195,8 +2246,13 @@ void registerWebRoutes() {
       return;
     }
     displayOn = parseBool(webServer.arg("enabled"));
+    configStore.mutableConfig().displayDefaultOn = displayOn;
+    if (!configStore.saveDisplayDefaultOn()) {
+      sendError(500, "Impossibile salvare lo stato predefinito del display");
+      return;
+    }
     display.setEnabled(displayOn);
-    logSystem("info", displayOn ? "display_enabled" : "display_disabled");
+    logSystem("info", displayOn ? "display_enabled" : "display_disabled", "persisted=true");
     sendJson("{\"ok\":true}");
   });
 
@@ -2425,6 +2481,8 @@ void registerWebRoutes() {
     config.batteryMaxMv = batteryMaxMv;
     config.batteryCapacityMah = constrain(webServer.arg("battery_capacity_mah").toInt(), 100, 20000);
     configStore.saveSettings();
+    displayOn = config.displayDefaultOn;
+    display.setEnabled(displayOn);
     timeSynchronized = false;
     requestTimeSynchronization();
     pruneExpiredArchives();
@@ -2467,55 +2525,121 @@ void registerWebRoutes() {
     scheduledRestartMs = millis() + 900;
   });
 
+  webServer.on("/api/ota/start", HTTP_POST, [] {
+    if (!authorized()) return;
+    const size_t signedSize = static_cast<size_t>(strtoull(webServer.arg("size").c_str(), nullptr, 10));
+    const String target = webServer.arg("version");
+    otaChunkUploadActive = beginSignedOta(signedSize, target);
+    if (!otaChunkUploadActive) {
+      sendError(400, otaErrorDetail);
+      return;
+    }
+    sendJson("{\"ok\":true,\"chunk_bytes\":12288}");
+  });
+
+  webServer.on("/api/ota/chunk", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (!otaChunkUploadActive || !Update.isRunning()) {
+      sendError(409, "Nessun aggiornamento in corso");
+      return;
+    }
+    const size_t offset = static_cast<size_t>(strtoull(webServer.arg("offset").c_str(), nullptr, 10));
+    if (offset != otaReceivedBytes) {
+      sendError(409, "Blocco fuori sequenza; atteso offset " + String(otaReceivedBytes));
+      return;
+    }
+    const String encoded = webServer.arg("data");
+    const size_t capacity = encoded.length() * 3 / 4 + 3;
+    uint8_t *decoded = static_cast<uint8_t *>(malloc(capacity));
+    if (decoded == nullptr) {
+      sendError(503, "Memoria insufficiente per il blocco OTA");
+      return;
+    }
+    size_t decodedLength = 0;
+    const int decodeResult = mbedtls_base64_decode(
+      decoded,
+      capacity,
+      &decodedLength,
+      reinterpret_cast<const unsigned char *>(encoded.c_str()),
+      encoded.length()
+    );
+    if (decodeResult != 0 || decodedLength == 0 || otaReceivedBytes + decodedLength > otaExpectedBytes) {
+      free(decoded);
+      sendError(400, "Blocco firmware non valido");
+      return;
+    }
+    const size_t written = Update.write(decoded, decodedLength);
+    free(decoded);
+    if (written != decodedLength) {
+      otaErrorDetail = Update.errorString();
+      Update.abort();
+      otaChunkUploadActive = false;
+      sendError(500, otaErrorDetail);
+      return;
+    }
+    otaReceivedBytes += written;
+    sendJson("{\"ok\":true,\"received\":" + String(otaReceivedBytes) + "}");
+  });
+
+  webServer.on("/api/ota/finish", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (!otaChunkUploadActive || otaReceivedBytes != otaExpectedBytes) {
+      sendError(409, "Firmware incompleto");
+      return;
+    }
+    otaChunkUploadActive = false;
+    if (!finishSignedOta()) {
+      sendError(500, otaErrorDetail);
+      return;
+    }
+    sendJson("{\"ok\":true,\"restart_required\":true}");
+    scheduledRestartMs = millis() + 1200;
+  });
+
+  webServer.on("/api/ota/abort", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (Update.isRunning()) Update.abort();
+    otaChunkUploadActive = false;
+    otaErrorDetail = "Upload annullato";
+    recordFirmwareUpdate("aborted", otaTargetLabel, otaErrorDetail);
+    logSystem("warning", "ota_aborted");
+    sendJson("{\"ok\":true}");
+  });
+
   webServer.on(
     "/api/ota",
     HTTP_POST,
     [] {
-      if (!authorized()) return;
+      if (!otaUploadAuthorized) return;
       if (otaSucceeded) {
         sendJson("{\"ok\":true,\"restart_required\":true}");
         scheduledRestartMs = millis() + 1200;
       } else {
         sendError(500, otaErrorDetail.isEmpty() ? Update.errorString() : otaErrorDetail);
       }
+      otaUploadAuthorized = false;
     },
     [] {
-      if (!authorized()) return;
       HTTPUpload &upload = webServer.upload();
       if (upload.status == UPLOAD_FILE_START) {
-        otaSucceeded = false;
-        otaSignatureVerified = false;
-        otaErrorDetail = "";
-        otaPreviousVersion = kFirmwareVersion;
-        otaTargetLabel = webServer.header("X-Firmware-Version");
-        if (otaTargetLabel.isEmpty()) otaTargetLabel = upload.filename;
+        otaUploadAuthorized = authorized();
+        if (!otaUploadAuthorized) return;
+        String target = webServer.header("X-Firmware-Version");
+        if (target.isEmpty()) target = upload.filename;
         const size_t signedSize = static_cast<size_t>(strtoull(webServer.header("X-Firmware-Size").c_str(), nullptr, 10));
-        if (signedSize <= 512) {
-          otaErrorDetail = "Dimensione firmware firmato mancante o non valida";
-          return;
-        }
-        if (!Update.installSignature(&otaVerifier)) {
-          otaErrorDetail = "Impossibile inizializzare la verifica ECDSA";
-          return;
-        }
-        if (!Update.begin(signedSize)) {
-          otaErrorDetail = Update.errorString();
-          Update.printError(Serial);
-          return;
-        }
-        recordFirmwareUpdate("started", otaTargetLabel, "signed_bytes=" + String(signedSize));
+        beginSignedOta(signedSize, target);
+      } else if (!otaUploadAuthorized) {
+        return;
       } else if (upload.status == UPLOAD_FILE_WRITE) {
         if (!Update.isRunning()) return;
         if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
           otaErrorDetail = Update.errorString();
           Update.printError(Serial);
+        } else {
+          otaReceivedBytes += upload.currentSize;
         }
       } else if (upload.status == UPLOAD_FILE_END) {
-        otaSucceeded = Update.isRunning() && Update.end();
-        otaSignatureVerified = otaSucceeded;
-        if (!otaSucceeded) otaErrorDetail = Update.errorString();
-        recordFirmwareUpdate(otaSucceeded ? "verified" : "failed", otaTargetLabel, otaErrorDetail);
-        logSystem(otaSucceeded ? "info" : "error", otaSucceeded ? "ota_complete" : "ota_failed");
+        finishSignedOta();
       } else if (upload.status == UPLOAD_FILE_ABORTED) {
         Update.abort();
         otaErrorDetail = "Upload annullato";
@@ -2682,7 +2806,37 @@ void loop() {
       now
     );
     if (currentSnapshot.changed) recordWeightEvent();
-    display.render(sensorReadings, currentSnapshot, WiFi.status() == WL_CONNECTED, sdReady);
+    const bool wifiConnected = WiFi.status() == WL_CONNECTED;
+    const DeviceConfig &config = configStore.get();
+    const String displayIp = wifiConnected ? WiFi.localIP().toString() :
+      (accessPointActive ? WiFi.softAPIP().toString() : "-");
+    const String displaySsid = wifiConnected ? WiFi.SSID() :
+      (accessPointActive ? kRescueSsid : config.wifiSsid);
+    DisplayStatus displayStatus;
+    displayStatus.firmwareVersion = kFirmwareVersion;
+    displayStatus.ssid = displaySsid.c_str();
+    displayStatus.ipAddress = displayIp.c_str();
+    displayStatus.rssi = wifiConnected ? WiFi.RSSI() : 0;
+    displayStatus.wifiConnected = wifiConnected;
+    displayStatus.accessPointActive = accessPointActive;
+    displayStatus.sdReady = sdReady;
+    displayStatus.sdUsedBytes = sdReady ? SD.usedBytes() : 0;
+    displayStatus.sdTotalBytes = sdReady ? SD.totalBytes() : 0;
+    displayStatus.timeSynchronized = timeSynchronized;
+    displayStatus.externalPower = externalPowerPresent;
+    displayStatus.batteryConfigured = config.batterySenseEnabled;
+    displayStatus.batteryVoltageMv = batteryVoltageMv;
+    displayStatus.batteryPercent = estimatedBatteryPercent();
+    displayStatus.integrationConfigured = !config.backendUrl.isEmpty();
+    displayStatus.integrationOnline = integrationLastOk;
+    displayStatus.mqttEnabled = config.mqttEnabled;
+    displayStatus.mqttConnected = mqttClient.connected();
+    displayStatus.heartbeatFailures = heartbeatConsecutiveFailures;
+    displayStatus.sequence = sequenceNumber;
+    displayStatus.uptimeSeconds = now / 1000;
+    displayStatus.freeHeap = ESP.getFreeHeap();
+    displayStatus.chipTemperatureC = temperatureRead();
+    display.render(sensorReadings, currentSnapshot, displayStatus);
   }
 
   if (now - lastScanCounterMs >= 1000) {

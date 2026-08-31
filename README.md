@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 1.2.0" src="https://img.shields.io/badge/firmware-1.2.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 1.3.0" src="https://img.shields.io/badge/firmware-1.3.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-C6" src="https://img.shields.io/badge/ESP32--C6-Wi--Fi_6-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 20 su 20" src="https://img.shields.io/badge/test-20%2F20_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 21 su 21" src="https://img.shields.io/badge/test-21%2F21_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -43,16 +43,17 @@ repository contiene firmware, simulatore, contratto di integrazione e
 documentazione hardware.
 
 > [!IMPORTANT]
-> Firmware e interfaccia sono compilati e verificati virtualmente. Sensori,
-> microSD, batteria, commutazione di alimentazione, Wi-Fi del sito e rollback
-> OTA devono ancora essere collaudati insieme sull'hardware definitivo.
+> Firmware, portale, Wi-Fi, persistenza del display e aggiornamento OTA firmato
+> sono stati verificati sull'ESP32-C6 reale. Restano da collaudare con l'hardware
+> definitivo microSD FAT32, batteria, commutazione di alimentazione e rollback
+> provocato da un'immagine non avviabile.
 
 ## ✦ Funzioni
 
 | Area | Funzioni disponibili |
 | --- | --- |
 | **Acquisizione** | Quattro AS5600 isolati tramite PCA9546/TCA9546A, calibrazione di dieci posizioni per manopola, tolleranza, isteresi e stabilità |
-| **Portale web** | Dashboard responsive, display remoto, calibrazione, storico filtrabile e ordinabile, sistema, assistenza CaskLogic e tema chiaro/scuro |
+| **Portale web** | Dashboard responsive, display remoto multipagina, calibrazione, storico filtrabile e ordinabile, sistema, assistenza CaskLogic e tema chiaro/scuro |
 | **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD |
 | **Autodiagnosi** | Test di sensori, microSD, batteria, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore per sensore |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
@@ -67,11 +68,11 @@ non trasforma la microSD in un NAS.
 
 | Pagina | Cosa permette di fare |
 | --- | --- |
-| **Riepilogo** | Leggere peso, stabilità, stato dei quattro sensori, frequenza di scansione, Wi-Fi, microSD, alimentazione e batteria. Il display fisico può essere acceso solo quando serve e rimane spento per default. |
+| **Riepilogo** | Leggere peso, stabilità, stato dei quattro sensori, frequenza di scansione, Wi-Fi, microSD, alimentazione e batteria. Lo stato scelto per il display viene salvato e rispettato dopo ogni riavvio. |
 | **Calibrazione** | Associare a ciascuna manopola le dieci posizioni `0–9`, salvare il valore magnetico reale e regolare moltiplicatore, tolleranza e isteresi senza ricompilare il firmware. |
 | **Storico** | Consultare soltanto le 20 pesate più recenti al primo accesso, filtrare e ordinare ogni colonna ed esportare esattamente il risultato dei filtri attivi. |
 | **Rete e gestionale** | Cercare reti Wi-Fi, scegliere DHCP o IP statico, configurare HTTPS/mTLS, HMAC, heartbeat, MQTT TLS e sincronizzazione controllata dal gestionale. |
-| **Sistema** | Gestire display predefinito, NTP, fuso orario, credenziali, retention, dimensione dei file, batteria, log, riavvio e aggiornamento OTA firmato. |
+| **Sistema** | Gestire display predefinito, NTP, fuso orario, credenziali, retention, dimensione dei file, batteria, log, riavvio e aggiornamento OTA firmato. Un clic breve su BOOT scorre le viste Peso, Sensori, Rete, Sistema e Gestionale; la pressione continua mostra la barra del ripristino da 10 secondi. |
 | **Autodiagnosi** | Eseguire prove attive, controllare errori e magneti dei sensori, osservare i grafici giornalieri e scaricare un pacchetto assistenza anonimizzato. |
 | **CaskLogic** | Consultare contatti di assistenza, titolarità, crediti, versione e informazioni legali del dispositivo. |
 
@@ -189,10 +190,10 @@ py -m platformio run
 
 | Risorsa | Utilizzo verificato |
 | --- | ---: |
-| RAM statica | `50.708 / 327.680 byte` · `15,5%` |
-| Flash applicazione | `1.686.942 / 2.031.616 byte` · `83,0%` |
-| Immagine OTA firmata | `1.744.992 byte` |
-| Margine per slot OTA | `286.624 byte` · `14,1%` |
+| RAM statica | `51.124 / 327.680 byte` · `15,6%` |
+| Flash applicazione | `1.701.906 / 2.031.616 byte` · `83,8%` |
+| Immagine OTA firmata | `1.761.136 byte` |
+| Margine per slot OTA | `263.392 byte` · `13,0%` |
 
 Artefatti principali:
 
@@ -249,10 +250,11 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
-- [x] Test host `20/20` e build ESP32-C6 completati
-- [x] OTA firmato e doppia partizione con margine del `14,1%`
+- [x] Test host `21/21` e build ESP32-C6 completati
+- [x] OTA firmato verificato sull'hardware e doppia partizione con margine del `13,3%`
+- [x] Wi-Fi del sito e persistenza del display verificati dopo riavvio
 - [ ] Calibrazione meccanica completa delle quattro manopole
-- [ ] Collaudo reale di microSD, batteria, Wi-Fi, display e rollback
+- [ ] Collaudo reale di microSD FAT32, batteria, commutazione e rollback forzato
 - [ ] Implementazione del contratto nel gestionale CaskLogic
 
 ## Licenza e attribuzioni

@@ -168,6 +168,10 @@ bool ConfigStore::saveSettings() {
   return ok;
 }
 
+bool ConfigStore::saveDisplayDefaultOn() {
+  return preferences_.putBool("display_on", config_.displayDefaultOn) > 0;
+}
+
 bool ConfigStore::saveHeartbeatRestartSuppressed() {
   preferences_.putBool("hb_suppress", config_.heartbeatRestartSuppressed);
   return true;

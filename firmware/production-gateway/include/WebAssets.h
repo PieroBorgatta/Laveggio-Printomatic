@@ -202,10 +202,10 @@ inline constexpr char WEB_INDEX_HTML[] PROGMEM = R"LAVEGGIO_WEB(<!doctype html>
           <div class="panel form-panel">
             <div class="panel-heading"><div><p class="eyebrow">Manutenzione</p><h2>Firmware e diagnostica</h2></div></div>
             <dl class="details" id="system-details"></dl>
-            <form id="ota-form" class="upload-box"><label><span>Firmware firmato</span><input name="firmware" type="file" accept=".signed.bin" required><small>Accetta esclusivamente immagini ECDSA-P256 prodotte da CaskLogic</small></label><button class="button secondary" type="submit">Carica firmware</button></form>
+            <form id="ota-form" class="upload-box"><label><span>Firmware firmato</span><input name="firmware" type="file" accept=".signed.bin" required><small>Seleziona il file CaskLogic .signed.bin. Il dispositivo verifica la firma, installa l'aggiornamento e si riavvia automaticamente.</small></label><button class="button secondary" id="ota-submit" type="submit">Installa aggiornamento</button><div class="ota-progress" id="ota-progress" aria-live="polite" hidden><div><strong id="ota-status">Pronto</strong><span id="ota-percent">0%</span></div><progress id="ota-progress-bar" max="100" value="0"></progress><small id="ota-detail">Nessun aggiornamento in corso</small></div></form>
             <div class="log-box" id="system-log">Caricamento diagnostica...</div>
             <a class="button secondary" href="/api/logs/export" download>Esporta log completi</a>
-            <div class="reset-procedure"><strong>Ripristino fisico</strong><p>Con il dispositivo acceso, tenere premuto il solo tasto BOOT per 10 secondi, quindi rilasciarlo. La configurazione, le credenziali e le calibrazioni vengono azzerate; storico e log sulla microSD restano conservati.</p></div>
+            <div class="reset-procedure"><strong>Tasti del dispositivo</strong><p>Premere brevemente BOOT per cambiare schermata sul display. Per il ripristino, tenere premuto BOOT per 10 secondi seguendo barra e conto alla rovescia, quindi rilasciarlo. Configurazione, credenziali e calibrazioni vengono azzerate; storico e log sulla microSD restano conservati. Il tasto RESET riavvia soltanto il dispositivo.</p></div>
             <button class="button danger" type="button" id="restart-device">Riavvia dispositivo</button>
           </div>
           <div class="panel form-panel">
@@ -275,6 +275,7 @@ inline constexpr char WEB_APP_CSS[] PROGMEM = R"LAVEGGIO_WEB(:root{color-scheme:
 @media(max-width:470px){.diagnostic-grid{grid-template-columns:1fr}.heading-actions{display:grid;grid-template-columns:1fr}.chart-panel canvas{height:170px}}
 .filter-bar,.filter-bar label,.filter-bar input,.filter-bar select{min-width:0;max-width:100%}.reset-procedure{border:1px solid var(--border);border-radius:6px;background:var(--surface-2);padding:12px}.reset-procedure strong{font-size:12px}.reset-procedure p{margin:6px 0 0;color:var(--muted);font-size:11px;line-height:1.55}
 .mode-segment{border:1px solid var(--border);border-radius:6px;padding:3px;margin:0;display:grid;grid-template-columns:1fr 1fr;background:var(--surface-3)}.mode-segment label{position:relative;cursor:pointer}.mode-segment input{position:absolute;opacity:0;pointer-events:none}.mode-segment span{height:34px;display:flex;align-items:center;justify-content:center;border-radius:4px;color:var(--muted);font-size:11px;font-weight:700}.mode-segment input:checked+span{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(16,24,40,.12)}.mode-segment input:focus-visible+span{outline:2px solid var(--teal);outline-offset:1px}.ip-grid[hidden]{display:none!important}
+.ota-progress{grid-column:1/-1;display:grid;gap:7px;padding-top:4px}.ota-progress[hidden]{display:none}.ota-progress>div{display:flex;align-items:center;justify-content:space-between;gap:12px}.ota-progress strong{font-size:12px}.ota-progress span,.ota-progress small{font-size:10px;color:var(--muted)}.ota-progress progress{width:100%;height:9px;accent-color:var(--blue-2)}.ota-progress.success progress{accent-color:var(--success)}.ota-progress.error progress{accent-color:var(--danger)}
 )LAVEGGIO_WEB";
 inline constexpr char WEB_APP_JS[] PROGMEM = R"LAVEGGIO_WEB(const state={status:null,settings:null,calibration:null,history:[],diagnostics:null,daily:[],updates:[],channel:0,poll:null,historySort:'captured_at',historyDirection:'desc'};
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -318,6 +319,57 @@ function renderFirmwareUpdates(){const body=$('#firmware-updates-body');body.inn
 async function loadDiagnostics(active=false){const diagnosticsRequest=active?api('/api/diagnostics/run',{method:'POST'}):api('/api/diagnostics');const [diagnostics,daily,updates]=await Promise.all([diagnosticsRequest,api('/api/diagnostics/daily'),api('/api/firmware/updates')]);state.diagnostics=diagnostics;state.daily=daily.points||[];state.updates=updates.items||[];renderDiagnosticTests();renderDiagnosticCharts();renderSensorErrors();renderFirmwareUpdates();$('#current-availability').textContent=daily.current_available?'Corrente disponibile':'Corrente non disponibile'}
 function confirmAction(title,message){return new Promise(resolve=>{const dialog=$('#confirm-dialog');$('#dialog-title').textContent=title;$('#dialog-message').textContent=message;dialog.addEventListener('close',()=>resolve(dialog.returnValue==='confirm'),{once:true});dialog.showModal()})}
 
+function setOtaState(status,detail,percent,tone=''){
+  const panel=$('#ota-progress');
+  panel.hidden=false;
+  panel.className=`ota-progress ${tone}`.trim();
+  $('#ota-status').textContent=status;
+  $('#ota-detail').textContent=detail;
+  $('#ota-percent').textContent=percent==null?'':`${percent}%`;
+  if(percent!=null)$('#ota-progress-bar').value=percent;
+}
+function firmwareVersionFromName(name){return name.match(/(\d+\.\d+\.\d+)/)?.[1]||''}
+function bytesToBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let index=0;index<bytes.length;index++)binary+=String.fromCharCode(bytes[index]);return btoa(binary)}
+async function uploadFirmware(file){
+  const chunkSize=12288;
+  await api('/api/ota/start',{method:'POST',body:formBody({size:file.size,version:file.name})});
+  let offset=0;
+  try{
+    while(offset<file.size){
+      const end=Math.min(offset+chunkSize,file.size);
+      const encoded=bytesToBase64(await file.slice(offset,end).arrayBuffer());
+      await api('/api/ota/chunk',{method:'POST',body:formBody({offset,data:encoded})});
+      offset=end;
+      const percent=Math.min(99,Math.round(offset/file.size*100));
+      setOtaState('Caricamento firmware',`${formatBytes(offset)} di ${formatBytes(file.size)}`,percent);
+    }
+    const result=await api('/api/ota/finish',{method:'POST',body:formBody({})});
+    setOtaState('Firma verificata','Aggiornamento installato. Attendo il riavvio automatico...',100);
+    return result;
+  }catch(error){
+    await api('/api/ota/abort',{method:'POST',body:formBody({})}).catch(()=>{});
+    throw error;
+  }
+}
+async function waitForOtaRestart(previousBootId,expectedVersion){
+  const deadline=Date.now()+90000;
+  await new Promise(resolve=>setTimeout(resolve,2500));
+  setOtaState('Riavvio automatico','Il portale tornerà disponibile appena il dispositivo avrà completato l’autotest.',100);
+  while(Date.now()<deadline){
+    try{
+      const status=await api('/api/status');
+      if(status.boot_id!==previousBootId&&(!expectedVersion||status.firmware_version===expectedVersion)){
+        state.status=status;
+        renderStatus();
+        setOtaState('Aggiornamento completato',`Firmware ${status.firmware_version} attivo e autotest di avvio superato.`,100,'success');
+        return;
+      }
+    }catch{}
+    await new Promise(resolve=>setTimeout(resolve,1800));
+  }
+  throw new Error('Il dispositivo non è tornato online entro 90 secondi. Verificare alimentazione e indirizzo IP.')
+}
+
 async function refreshStatus(){try{state.status=await api('/api/status');renderStatus()}catch(error){$('#sidebar-dot').classList.add('offline');$('#sidebar-state').textContent='Connessione persa';$('#last-update').textContent='Offline'}}
 function openView(name){$$('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));$$('.nav-button').forEach(button=>button.classList.toggle('active',button.dataset.view===name));$('#page-title').textContent=titles[name];if(name==='calibration')loadCalibration().catch(error=>toast(error.message,true));if(name==='history')loadHistory().catch(error=>toast(error.message,true));if(name==='system')loadLog();if(name==='diagnostics')loadDiagnostics().catch(error=>toast(error.message,true))}
 
@@ -342,7 +394,8 @@ async function init(){
   $('#sync-config').addEventListener('click',async()=>{try{const result=await api('/api/config/sync',{method:'POST'});toast(`Configurazione sincronizzata · versione ${result.version}`);await refreshStatus()}catch(error){toast(error.message,true)}});
   $('#run-diagnostics').addEventListener('click',async()=>{const button=$('#run-diagnostics');button.disabled=true;try{await loadDiagnostics(true);toast('Autodiagnosi completata')}catch(error){toast(error.message,true)}finally{button.disabled=false}});
   $('#restart-device').addEventListener('click',async()=>{if(!await confirmAction('Riavviare il dispositivo?','Le letture saranno sospese per alcuni secondi.'))return;try{await api('/api/restart',{method:'POST'});toast('Riavvio avviato')}catch(error){toast(error.message,true)}});
-  $('#ota-form').addEventListener('submit',async event=>{event.preventDefault();const file=event.currentTarget.firmware.files[0];if(!file)return;if(!file.name.endsWith('.signed.bin')){toast('Selezionare un firmware .signed.bin',true);return}if(!await confirmAction('Aggiornare il firmware firmato?','La firma ECDSA verrà verificata prima dell’avvio. Non interrompere l’alimentazione.'))return;const data=new FormData(event.currentTarget);try{await api('/api/ota',{method:'POST',body:data,headers:{'X-Firmware-Size':String(file.size),'X-Firmware-Version':file.name}});toast('Firma verificata; riavvio e autotest in corso')}catch(error){toast(error.message,true)}});
+  $('#ota-form').firmware.addEventListener('change',event=>{const file=event.target.files[0];if(file)setOtaState('File selezionato',`${file.name} · ${formatBytes(file.size)}`,0)});
+  $('#ota-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget;const file=form.firmware.files[0];if(!file)return;if(!file.name.endsWith('.signed.bin')){setOtaState('File non valido','Selezionare un firmware CaskLogic con estensione .signed.bin.',0,'error');return}if(!await confirmAction('Installare l’aggiornamento?','Caricamento, verifica della firma e riavvio saranno automatici. Non interrompere l’alimentazione.'))return;const button=$('#ota-submit');button.disabled=true;form.firmware.disabled=true;const previousBootId=state.status?.boot_id||'';try{await uploadFirmware(file);await waitForOtaRestart(previousBootId,firmwareVersionFromName(file.name));toast('Aggiornamento firmware completato')}catch(error){setOtaState('Aggiornamento non riuscito',error.message,0,'error');toast(error.message,true)}finally{button.disabled=false;form.firmware.disabled=false}});
   try{state.settings=await api('/api/settings');populateForms();await refreshStatus()}catch(error){toast(error.message,true)}
   state.poll=setInterval(refreshStatus,1000);
   window.addEventListener('resize',()=>{if($('#view-diagnostics').classList.contains('active'))renderDiagnosticCharts()});
