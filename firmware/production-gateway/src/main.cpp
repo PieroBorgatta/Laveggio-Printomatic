@@ -8,7 +8,7 @@
 #include <HTTPClient.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
-#include <SD.h>
+#include <SD_MMC.h>
 #include <SPI.h>
 #include <Update.h>
 #include <WebServer.h>
@@ -25,10 +25,15 @@
 
 #include "DeviceConfig.h"
 #include "DisplayDriver.h"
+#include "BoardHardware.h"
 #include "OtaPublicKey.h"
 #include "ScaleCore.h"
 #include "StoredZip.h"
+#include "SpeakerDriver.h"
 #include "WebAssets.h"
+
+// Conserva il contratto FS esistente usando il controller SDMMC nativo della nuova scheda.
+#define SD SD_MMC
 
 extern "C" bool verifyRollbackLater() {
   return true;
@@ -36,15 +41,19 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "1.3.0";
+constexpr char kFirmwareVersion[] = "2.0.0";
 constexpr uint8_t kAs5600Address = 0x36;
-constexpr uint8_t kSdCs = 4;
-constexpr uint8_t kI2cSda = 1;
-constexpr uint8_t kI2cScl = 2;
-constexpr uint8_t kMuxReset = 3;
-constexpr uint8_t kPowerSensePin = 20;
-constexpr uint8_t kBatterySensePin = 0;
-constexpr uint8_t kFactoryResetButtonPin = 9;
+constexpr uint8_t kSdClock = 14;
+constexpr uint8_t kSdCommand = 17;
+constexpr uint8_t kSdData0 = 16;
+constexpr uint8_t kSdData3 = 21;
+constexpr uint8_t kI2cSda = 11;
+constexpr uint8_t kI2cScl = 10;
+constexpr uint8_t kMuxReset = 18;
+constexpr uint8_t kPowerSensePin = 15;
+constexpr uint8_t kFactoryResetButtonPin = 0;
+constexpr uint8_t kBatteryPowerKeyPin = 6;
+constexpr uint8_t kBatteryPowerHoldPin = 7;
 constexpr uint32_t kFactoryResetHoldMs = 10000;
 constexpr uint32_t kFactoryResetFeedbackDelayMs = 600;
 constexpr uint32_t kButtonDebounceMs = 40;
@@ -104,6 +113,8 @@ struct SdHealthState {
 
 ConfigStore configStore;
 DisplayDriver display;
+BoardHardware boardHardware;
+SpeakerDriver speaker;
 WebServer webServer(80);
 DNSServer dnsServer;
 WiFiClientSecure mqttTlsClient;
@@ -123,6 +134,7 @@ int8_t muxAddress = -1;
 bool sdReady = false;
 bool accessPointActive = false;
 bool displayOn = false;
+bool speakerOn = true;
 bool integrationLastOk = false;
 bool otaSucceeded = false;
 bool otaSignatureVerified = false;
@@ -239,6 +251,7 @@ void pollTimeSynchronization(uint32_t now) {
   if (valid && !timeSynchronized) {
     timeSynchronized = true;
     lastTimeSyncAt = timestampIso();
+    boardHardware.synchronizeRtc(time(nullptr));
     logSystem("info", "time_synchronized", lastTimeSyncAt);
   }
   if (!valid && WiFi.status() == WL_CONNECTED &&
@@ -908,6 +921,17 @@ void mqttMessageReceived(char *, byte *payload, unsigned int length) {
     publishMqttCommandAck(commandId, command, true, "Display aggiornato");
     return;
   }
+  if (command == "speaker.set") {
+    if (!document["enabled"].is<bool>()) {
+      publishMqttCommandAck(commandId, command, false, "Parametro enabled mancante");
+      return;
+    }
+    speakerOn = document["enabled"].as<bool>();
+    speaker.setEnabled(speakerOn);
+    logSystem("info", "mqtt_speaker_command", speakerOn ? "enabled" : "disabled");
+    publishMqttCommandAck(commandId, command, true, "Speaker aggiornato");
+    return;
+  }
   if (command == "config.sync") {
     const bool ok = syncRemoteConfiguration();
     publishMqttCommandAck(commandId, command, ok, ok ? "Configurazione sincronizzata" : lastConfigSyncError);
@@ -1029,6 +1053,7 @@ bool syncRemoteConfiguration() {
 
   if (document["stable_ms"].is<uint32_t>()) config.stableWindowMs = constrain(document["stable_ms"].as<uint32_t>(), 100UL, 5000UL);
   if (document["display_default_on"].is<bool>()) config.displayDefaultOn = document["display_default_on"].as<bool>();
+  if (document["speaker_default_on"].is<bool>()) config.speakerDefaultOn = document["speaker_default_on"].as<bool>();
   if (document["heartbeat_seconds"].is<uint32_t>()) config.heartbeatSeconds = constrain(document["heartbeat_seconds"].as<uint32_t>(), 5UL, 3600UL);
   if (document["heartbeat_watchdog_enabled"].is<bool>()) config.heartbeatWatchdogEnabled = document["heartbeat_watchdog_enabled"].as<bool>();
   if (document["heartbeat_failure_threshold"].is<uint8_t>()) config.heartbeatFailureThreshold = constrain(document["heartbeat_failure_threshold"].as<uint8_t>(), 3, 20);
@@ -1083,6 +1108,7 @@ void recordWeightEvent() {
   if (config.mqttEnabled && mqttClient.connected()) {
     mqttClient.publish(mqttTopic("weights").c_str(), outboundRecord.c_str(), false);
   }
+  speaker.confirmWeight();
 }
 
 void sendHeartbeat() {
@@ -1431,6 +1457,8 @@ String buildStatusJson() {
   const time_t nowEpoch = time(nullptr);
   json += ",\"booted_at\":" + quoted(timestampIso(nowEpoch - millis() / 1000));
   json += ",\"display_on\":" + boolJson(displayOn);
+  json += ",\"speaker_on\":" + boolJson(speakerOn);
+  json += ",\"speaker_ready\":" + boolJson(speaker.ready());
   json += ",\"scan_rate_hz\":" + String(scansPerSecond);
   json += ",\"network\":{\"connected\":" + boolJson(WiFi.status() == WL_CONNECTED);
   json += ",\"ssid\":" + quoted(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "");
@@ -1469,12 +1497,29 @@ String buildStatusJson() {
   json += ",\"power\":{\"external\":" + boolJson(externalPowerPresent);
   json += ",\"source_label\":" + quoted(powerLabel);
   json += ",\"battery_configured\":" + boolJson(config.batterySenseEnabled);
+  json += ",\"battery_present\":" + boolJson(boardHardware.status().batteryAvailable);
   json += ",\"battery_voltage_mv\":" + String(batteryVoltageMv);
   json += ",\"battery_percent\":" + String(estimatedBatteryPercent());
   json += ",\"battery_capacity_mah\":" + String(config.batteryCapacityMah);
   json += ",\"current_sensor_configured\":false";
   json += ",\"current_ma\":null";
   json += ",\"chip_temperature_c\":" + String(temperatureRead(), 1) + "}";
+  const BoardHardwareStatus &board = boardHardware.status();
+  json += ",\"board\":{\"model\":\"Waveshare ESP32-S3-Touch-LCD-2.8\"";
+#ifdef TOUCH_CST328_PREFERRED
+  json += ",\"revision_profile\":\"V1\"";
+#else
+  json += ",\"revision_profile\":\"V2\"";
+#endif
+  json += ",\"touch_available\":" + boolJson(display.touchAvailable());
+  json += ",\"touch_controller\":" + quoted(display.touchControllerName());
+  json += ",\"imu_available\":" + boolJson(board.imuAvailable);
+  json += ",\"acceleration_g\":{\"x\":" + String(board.accelerationX, 3);
+  json += ",\"y\":" + String(board.accelerationY, 3) + ",\"z\":" + String(board.accelerationZ, 3) + "}";
+  json += ",\"board_temperature_c\":" + String(board.boardTemperatureC, 1);
+  json += ",\"rtc_available\":" + boolJson(board.rtcAvailable);
+  json += ",\"rtc_valid\":" + boolJson(board.rtcClockValid);
+  json += ",\"rtc_datetime\":" + quoted(board.rtcDateTime) + "}";
   json += ",\"security\":{\"portal_auth\":\"basic\",\"portal_https\":false";
   json += ",\"csrf_protected\":true,\"rate_limit_enabled\":true";
   json += ",\"ota_signature_required\":true,\"ota_signature_algorithm\":\"ECDSA-P256-SHA256\"";
@@ -1559,6 +1604,7 @@ String buildSettingsJson() {
   json += ",\"timezone\":" + quoted(config.timezone);
   json += ",\"admin_user\":" + quoted(config.adminUser);
   json += ",\"display_default_on\":" + boolJson(config.displayDefaultOn);
+  json += ",\"speaker_default_on\":" + boolJson(config.speakerDefaultOn);
   json += ",\"power_sense_enabled\":" + boolJson(config.powerSenseEnabled);
   json += ",\"history_enabled\":" + boolJson(config.historyEnabled);
   json += ",\"history_keep_forever\":" + boolJson(config.historyKeepForever);
@@ -1666,7 +1712,7 @@ String diagnosticTestJson(const char *id, const char *label, const String &statu
 
 String buildDiagnosticsJson(bool active) {
   const DeviceConfig &config = configStore.get();
-  String tests[7];
+  String tests[11];
   uint8_t presentSensors = 0;
   uint8_t healthySensors = 0;
   for (const laveggio::SensorReading &reading : sensorReadings) {
@@ -1734,12 +1780,29 @@ String buildDiagnosticsJson(bool active) {
     "battery", "Batteria", !config.batterySenseEnabled ? "na" : (batteryAvailable ? "pass" : "warn"),
     !config.batterySenseEnabled ? "Monitoraggio non configurato" : String(batteryVoltageMv) + " mV"
   );
+  const BoardHardwareStatus &board = boardHardware.status();
+  tests[7] = diagnosticTestJson(
+    "touch", "Touch capacitivo", display.touchAvailable() ? "pass" : "fail",
+    display.touchAvailable() ? String(display.touchControllerName()) + " operativo" : "Controller non rilevato"
+  );
+  tests[8] = diagnosticTestJson(
+    "speaker", "Speaker PCM5101", speaker.ready() ? "pass" : "fail",
+    speaker.ready() ? (speakerOn ? "Pronto e abilitato" : "Pronto, suono disabilitato") : "I2S non inizializzato"
+  );
+  tests[9] = diagnosticTestJson(
+    "imu", "IMU QMI8658", board.imuAvailable ? "pass" : "fail",
+    board.imuAvailable ? "Accelerometro e giroscopio disponibili" : "Sensore non rilevato"
+  );
+  tests[10] = diagnosticTestJson(
+    "rtc", "RTC PCF85063", !board.rtcAvailable ? "fail" : (board.rtcClockValid ? "pass" : "warn"),
+    !board.rtcAvailable ? "RTC non rilevato" : (board.rtcClockValid ? String(board.rtcDateTime) : "Presente, ora da sincronizzare")
+  );
 
   String json = "{\"captured_at\":" + quoted(timestampIso());
   json += ",\"active_tests\":" + boolJson(active);
   json += ",\"time_synchronized\":" + boolJson(timeSynchronized);
   json += ",\"tests\":[";
-  for (uint8_t index = 0; index < 7; ++index) {
+  for (uint8_t index = 0; index < 11; ++index) {
     if (index) json += ',';
     json += tests[index];
   }
@@ -2255,6 +2318,23 @@ void registerWebRoutes() {
     logSystem("info", displayOn ? "display_enabled" : "display_disabled", "persisted=true");
     sendJson("{\"ok\":true}");
   });
+  webServer.on("/api/speaker", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (!webServer.hasArg("enabled")) {
+      sendError(400, "Parametro enabled mancante");
+      return;
+    }
+    speakerOn = parseBool(webServer.arg("enabled"));
+    configStore.mutableConfig().speakerDefaultOn = speakerOn;
+    if (!configStore.saveSpeakerDefaultOn()) {
+      sendError(500, "Impossibile salvare lo stato predefinito dello speaker");
+      return;
+    }
+    speaker.setEnabled(speakerOn);
+    if (speakerOn && parseBool(webServer.arg("test"))) speaker.testTone();
+    logSystem("info", speakerOn ? "speaker_enabled" : "speaker_disabled", "persisted=true");
+    sendJson("{\"ok\":true,\"ready\":" + boolJson(speaker.ready()) + "}");
+  });
 
   webServer.on("/api/calibration/capture", HTTP_POST, [] {
     if (!authorized()) return;
@@ -2469,6 +2549,7 @@ void registerWebRoutes() {
       config.adminPassword = adminPassword;
     }
     config.displayDefaultOn = parseBool(webServer.arg("display_default_on"));
+    config.speakerDefaultOn = parseBool(webServer.arg("speaker_default_on"));
     config.powerSenseEnabled = parseBool(webServer.arg("power_sense_enabled"));
     config.historyEnabled = parseBool(webServer.arg("history_enabled"));
     config.historyKeepForever = parseBool(webServer.arg("history_keep_forever"));
@@ -2483,6 +2564,8 @@ void registerWebRoutes() {
     configStore.saveSettings();
     displayOn = config.displayDefaultOn;
     display.setEnabled(displayOn);
+    speakerOn = config.speakerDefaultOn;
+    speaker.setEnabled(speakerOn);
     timeSynchronized = false;
     requestTimeSynchronization();
     pruneExpiredArchives();
@@ -2673,7 +2756,11 @@ void initializeIdentity() {
 }
 
 void initializeStorage() {
-  sdReady = SD.begin(kSdCs, SPI, 20000000);
+  pinMode(kSdData3, OUTPUT);
+  digitalWrite(kSdData3, HIGH);
+  delay(10);
+  sdReady = SD_MMC.setPins(kSdClock, kSdCommand, kSdData0, -1, -1, -1) &&
+    SD_MMC.begin("/sdcard", true, false);
   if (sdReady) ensureSdDirectories();
 }
 
@@ -2715,10 +2802,8 @@ void readBatteryStatus() {
     batteryVoltageMv = 0;
     return;
   }
-  const uint32_t adcMv = analogReadMilliVolts(kBatterySensePin);
-  batteryVoltageMv = static_cast<uint16_t>(
-    std::min<uint32_t>(65535, adcMv * config.batteryDividerMilli / 1000UL)
-  );
+  const BoardHardwareStatus &board = boardHardware.status();
+  batteryVoltageMv = board.batteryAvailable ? board.batteryVoltageMv : 0;
 }
 
 }  // namespace
@@ -2744,16 +2829,22 @@ void setup() {
   pinMode(kMuxReset, OUTPUT);
   digitalWrite(kMuxReset, HIGH);
   pinMode(kPowerSensePin, INPUT);
-  pinMode(kBatterySensePin, INPUT);
   pinMode(kFactoryResetButtonPin, INPUT_PULLUP);
+  pinMode(kBatteryPowerKeyPin, INPUT);
+  pinMode(kBatteryPowerHoldPin, OUTPUT);
+  digitalWrite(kBatteryPowerHoldPin, HIGH);
   analogReadResolution(12);
   Wire.begin(kI2cSda, kI2cScl, 100000);
   Wire.setTimeOut(20);
+  boardHardware.begin();
   discoverMux();
 
   display.begin();
   displayOn = configStore.get().displayDefaultOn;
   display.setEnabled(displayOn);
+  speakerOn = configStore.get().speakerDefaultOn;
+  speaker.begin();
+  speaker.setEnabled(speakerOn);
   initializeStorage();
 
   Serial.printf("Rescue AP: %s\n", kRescueSsid);
@@ -2789,6 +2880,7 @@ void setup() {
 
 void loop() {
   const uint32_t now = millis();
+  boardHardware.poll(now);
   checkFactoryResetButton(now);
   dnsServer.processNextRequest();
   webServer.handleClient();
@@ -2836,6 +2928,18 @@ void loop() {
     displayStatus.uptimeSeconds = now / 1000;
     displayStatus.freeHeap = ESP.getFreeHeap();
     displayStatus.chipTemperatureC = temperatureRead();
+    displayStatus.speakerEnabled = speakerOn;
+    displayStatus.speakerReady = speaker.ready();
+    displayStatus.touchAvailable = display.touchAvailable();
+    displayStatus.touchController = display.touchControllerName();
+    const BoardHardwareStatus &board = boardHardware.status();
+    displayStatus.imuAvailable = board.imuAvailable;
+    displayStatus.accelerationX = board.accelerationX;
+    displayStatus.accelerationY = board.accelerationY;
+    displayStatus.accelerationZ = board.accelerationZ;
+    displayStatus.rtcAvailable = board.rtcAvailable;
+    displayStatus.rtcClockValid = board.rtcClockValid;
+    displayStatus.rtcDateTime = board.rtcDateTime;
     display.render(sensorReadings, currentSnapshot, displayStatus);
   }
 

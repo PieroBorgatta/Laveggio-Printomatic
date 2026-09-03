@@ -3,60 +3,47 @@
 ## Schema logico
 
 ```text
-USB-C
-  │
-  ▼
-ESP32-C6-LCD-1.47
-  3V3  ─────────────── V+    PCA9546/TCA9546A
-  GND  ─────────────── GND          │
-  GPIO1 (SDA) ──────── SDA          ├── CH0 ── AS5600 #0
-  GPIO2 (SCL) ──────── SCL          ├── CH1 ── AS5600 #1
-                                    ├── CH2 ── AS5600 #2
-                                    └── CH3 ── AS5600 #3
+USB-C oppure LiPo 3,7 V
+          |
+          v
+Waveshare ESP32-S3-Touch-LCD-2.8
+  3V3  ---------------- V+    PCA9546/TCA9546A
+  GND  ---------------- GND          |
+  GPIO11 (SDA) -------- SDA          +-- CH0 -- AS5600 #0
+  GPIO10 (SCL) -------- SCL          +-- CH1 -- AS5600 #1
+                                      +-- CH2 -- AS5600 #2
+                                      +-- CH3 -- AS5600 #3
 
-Per ciascun canale:
-  V+  ───────────────────────────── VCC
-  GND ───────────────────────────── GND
-  SDA ───────────────────────────── SDA
-  SCL ───────────────────────────── SCL
-
-AS5600: DIR, GPO e OUT non collegati per la lettura I2C standard.
+Per ciascun canale: V+ -> VCC, GND -> GND, SDA -> SDA, SCL -> SCL.
+AS5600: DIR, GPO e OUT non collegati nella lettura I2C standard.
 ```
 
-## Collegamento ESP32 → multiplexer osservato
+## Scheda verso multiplexer
 
-| ESP32-C6 | Multiplexer | Colore osservato sul prototipo |
+| Waveshare ESP32-S3 | Multiplexer | Nota |
 | --- | --- | --- |
-| 3V3 | V+ | Rosso |
-| GND | GND | Nero |
-| GPIO 1 | SDA | Bianco |
-| GPIO 2 | SCL | Giallo |
+| 3V3 | V+ | Non usare 5 V senza verifica del modulo |
+| GND | GND | Massa comune obbligatoria |
+| GPIO11 | SDA | Bus esterno dedicato dal firmware |
+| GPIO10 | SCL | Bus esterno dedicato dal firmware |
+| GPIO18 | RST, opzionale | Collegare solo se si vuole il reset pilotato |
 
-Il pad `RST` del multiplexer non era necessario nel cablaggio a quattro fili
-usato durante le prove. Lo sketch mantiene inoltre GPIO 3 alto come predisposizione,
-ma senza un collegamento fisico questo pin non agisce sul multiplexer.
+Il multiplexer funziona anche con il solo cablaggio a quattro fili se il suo
+RST e gia mantenuto alto dalla scheda. GPIO18 viene predisposto alto dal
+firmware, ma non agisce se non e collegato fisicamente.
 
-## Multiplexer → AS5600: attenzione ai colori
+## Attenzione ai colori dei cavetti
 
-Nel cablaggio realmente osservato i connettori potevano specchiare l'ordine dei
-conduttori. Sul ramo che ha risposto correttamente è stata osservata questa
-corrispondenza elettrica:
+Sul prototipo precedente alcuni connettori specchiavano l'ordine dei fili. Il
+colore non identifica il segnale. Prima di alimentare:
 
-| Multiplexer | AS5600 | Colore osservato sul ramo sensore |
-| --- | --- | --- |
-| V+ | VCC | Rosso |
-| GND | GND | Nero |
-| SDA | SDA | Giallo |
-| SCL | SCL | Bianco |
+1. scollegare USB-C e batteria;
+2. leggere V+, GND, SDA e SCL sulle serigrafie;
+3. verificare ogni filo con il multimetro in continuita;
+4. escludere corti tra V+ e GND;
+5. collegare un solo AS5600 e verificare `0x70` e `0x36`;
+6. aggiungere gli altri rami uno alla volta.
 
-Questa tabella **non è una regola universale sui colori**. Prima di alimentare:
-
-1. scollegare USB-C;
-2. identificare la posizione `V+`, `GND`, `SDA`, `SCL` sulle serigrafie;
-3. verificare con un multimetro in continuità quale filo arriva a ogni pin;
-4. controllare che `V+` e `GND` non siano in corto;
-5. collegare un solo sensore e verificare `0x70` e `0x36`;
-6. aggiungere gli altri sensori uno alla volta.
-
-Collegare SDA e SCL invertiti non consente la comunicazione. Invertire VCC e
-GND può invece danneggiare i componenti.
+SDA/SCL invertiti impediscono la comunicazione; VCC/GND invertiti possono
+danneggiare i componenti. Display, touch, audio, RTC, IMU e microSD sono gia
+cablati sulla Waveshare e non devono essere riportati sul bus esterno.

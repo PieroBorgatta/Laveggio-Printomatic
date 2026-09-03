@@ -64,6 +64,7 @@ bool ConfigStore::begin(const String &deviceSuffix) {
     preferences_.putUChar("auth_rev", kAdminCredentialRevision);
   }
   config_.displayDefaultOn = preferences_.getBool("display_on", true);
+  config_.speakerDefaultOn = preferences_.getBool("speaker_on", true);
   config_.powerSenseEnabled = preferences_.getBool("pwr_sense", false);
   config_.powerSenseActiveHigh = preferences_.getBool("pwr_high", true);
   config_.stableWindowMs = preferences_.getUInt("stable_ms", 600);
@@ -76,8 +77,8 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.historyRetentionDays = preferences_.getUShort("hist_days", 730);
   config_.historyFileMaxMb = preferences_.getUShort("hist_max_mb", 32);
   config_.systemLogFileMaxMb = preferences_.getUShort("log_max_mb", 8);
-  config_.batterySenseEnabled = preferences_.getBool("bat_sense", false);
-  config_.batteryDividerMilli = preferences_.getUShort("bat_div", 2000);
+  config_.batterySenseEnabled = preferences_.getBool("bat_sense", true);
+  config_.batteryDividerMilli = preferences_.getUShort("bat_div", 3000);
   config_.batteryMinMv = preferences_.getUShort("bat_min_mv", 3200);
   config_.batteryMaxMv = preferences_.getUShort("bat_max_mv", 4200);
   config_.batteryCapacityMah = preferences_.getUShort("bat_cap_mah", 1200);
@@ -148,6 +149,7 @@ bool ConfigStore::saveSettings() {
   preferences_.putString("admin_user", config_.adminUser);
   preferences_.putString("admin_pass", config_.adminPassword);
   preferences_.putBool("display_on", config_.displayDefaultOn);
+  preferences_.putBool("speaker_on", config_.speakerDefaultOn);
   preferences_.putBool("pwr_sense", config_.powerSenseEnabled);
   preferences_.putBool("pwr_high", config_.powerSenseActiveHigh);
   preferences_.putUInt("stable_ms", config_.stableWindowMs);
@@ -170,6 +172,10 @@ bool ConfigStore::saveSettings() {
 
 bool ConfigStore::saveDisplayDefaultOn() {
   return preferences_.putBool("display_on", config_.displayDefaultOn) > 0;
+}
+
+bool ConfigStore::saveSpeakerDefaultOn() {
+  return preferences_.putBool("speaker_on", config_.speakerDefaultOn) > 0;
 }
 
 bool ConfigStore::saveHeartbeatRestartSuppressed() {

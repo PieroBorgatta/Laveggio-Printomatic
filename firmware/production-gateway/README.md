@@ -1,6 +1,6 @@
 # Firmware operativo Laveggio Printomatic
 
-Firmware completo per la Waveshare ESP32-C6-LCD-1.47. Legge quattro AS5600
+Firmware completo per la Waveshare ESP32-S3-Touch-LCD-2.8. Legge quattro AS5600
 attraverso il PCA9546/TCA9546A, converte le posizioni in peso, registra gli
 eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 
@@ -9,7 +9,10 @@ eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 - scansione continua dei quattro sensori a 100 kHz;
 - calibrazione persistente delle dieci posizioni di ogni manopola;
 - distanza angolare circolare, tolleranza, isteresi e finestra di stabilita;
-- display locale controllabile dal web, con stato persistente dopo il riavvio e cinque pagine operative selezionabili con un clic breve su BOOT;
+- display ST7789 240×320 controllabile dal web, con cinque pagine a card, swipe orizzontale, scroll verticale, footer touch e fallback BOOT;
+- touch con autodetect CST3530 per V2 e CST328 per V1;
+- doppio tono su speaker PCM5101 alla conferma della pesata, disabilitabile e persistente dal portale;
+- monitoraggio integrato di batteria GPIO8, QMI8658 e RTC PCF85063;
 - storico e log NDJSON settimanali in cartelle anno/mese su microSD FAT32;
 - campione diagnostico dei quattro sensori registrato ogni minuto;
 - sincronizzazione NTP richiesta subito dopo il Wi-Fi e completata senza
@@ -26,7 +29,7 @@ eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 - storico filtrabile e ordinabile, con sole 20 righe al primo caricamento ed
   export coerente con i filtri;
 - rotazione dimensionale e retention delle pesate configurabili;
-- tensione e stima percentuale della batteria opzionali su GPIO0;
+- tensione e stima percentuale della batteria integrata su GPIO8;
 - rilevazione opzionale della perdita di alimentazione esterna;
 - autodiagnosi, grafici delle ultime 24 ore e pacchetto assistenza ZIP
   anonimizzato;
@@ -37,34 +40,35 @@ eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 
 ## Compilazione
 
-Il supporto Arduino ufficiale di PlatformIO non abilita ancora ESP32-C6. Il
-progetto usa quindi la piattaforma comunitaria pioarduino, che installa Arduino
-ESP32 3.x. Su Windows conviene abilitare i percorsi lunghi oppure usare una
-cache corta solo per il comando di build:
+Il progetto usa Arduino ESP32 3.x tramite la piattaforma pioarduino. Il profilo
+predefinito e la revisione Waveshare V2 con touch CST3530; il secondo profilo
+mantiene la compatibilita con la V1 dotata di CST328. Su Windows conviene usare
+una cache PlatformIO corta per evitare il limite storico dei percorsi:
 
 ```powershell
 py -m pip install --user platformio
 $env:PLATFORMIO_CORE_DIR = 'C:\pio'
-py -m platformio run
+py -m platformio run -e waveshare_esp32s3_touch_lcd_28_v2
+py -m platformio run -e waveshare_esp32s3_touch_lcd_28_v1
 ```
 
 Artefatti principali:
 
-- `.pio/build/waveshare_esp32c6_lcd_147/firmware.signed.bin`: aggiornamento OTA
-  accettato dal portale;
-- `.pio/build/waveshare_esp32c6_lcd_147/firmware.bin`: binario non firmato
-  usato come input della firma, non caricabile dal portale;
-- `.pio/build/waveshare_esp32c6_lcd_147/firmware.factory.bin`: prima installazione completa.
+- `.pio/build/<profilo>/firmware.signed.bin`: aggiornamento OTA accettato dal
+  portale;
+- `.pio/build/<profilo>/firmware.bin`: binario non firmato usato come input
+  della firma, non caricabile dal portale;
+- `.pio/build/<profilo>/firmware.factory.bin`: prima installazione completa,
+  da usare quando si passa dalla vecchia ESP32-C6 alla ESP32-S3.
 
-Misure della build `1.3.0` verificata il 31 agosto 2026:
+Misure della build `2.0.0` verificata il 1 settembre 2026 per entrambi i profili:
 
-- RAM statica: `51.124 / 327.680 byte` (`15,6%`);
-- flash applicazione: `1.708.468 / 2.031.616 byte` (`84,1%`).
+- RAM statica: `54.436 / 327.680 byte` (`16,6%`);
+- flash applicazione: `1.657.078 / 6.291.456 byte` (`26,3%`).
 
-Le due partizioni OTA occupano `0x1F0000` byte ciascuna. La partizione SPIFFS
-e stata rimossa perche gli asset web sono incorporati nel firmware e i dati
-operativi risiedono sulla microSD. Il file OTA firmato verificato lascia
-`263.392 byte` (`13,0%`) in ciascuno slot.
+Le due partizioni OTA occupano `0x600000` byte, cioe 6 MiB ciascuna, sulla flash
+da 16 MB. La partizione SPIFFS e stata rimossa perche gli asset web sono
+incorporati nel firmware e i dati operativi risiedono sulla microSD.
 
 La RAM allocata dinamicamente per coda HTTPS, task e richieste web non e
 compresa nel primo valore; prima dell'installazione operativa va quindi
@@ -133,8 +137,11 @@ verso CaskLogic sono descritte in [`../../docs/security.md`](../../docs/security
 
 ## Limiti della verifica corrente
 
-La build 1.3.0 e stata installata tramite OTA firmato sulla scheda reale; Wi-Fi,
-riavvio automatico, validazione della nuova partizione e persistenza del display
-sono stati verificati. Restano da provare fisicamente: centraggio dei magneti,
-assorbimento, autonomia UPS, scritture reali sulla microSD FAT32, commutazione
-di alimentazione, rollback provocato e corrispondenza fra peso meccanico e digitale.
+Le build ESP32-S3 V2 e V1, la firma OTA, i test host e il portale in Chromium
+sono stati verificati senza la nuova scheda. Non sono ancora prova fisica di
+display, touch, speaker, batteria, RTC, IMU, SD_MMC o bus I2C esterno. La prima
+installazione richiede il file factory tramite USB: un OTA della precedente
+ESP32-C6 non puo trasformare o migrare l'hardware.
+
+La sequenza completa per il collaudo e in
+[`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).

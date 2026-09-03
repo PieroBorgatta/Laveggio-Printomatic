@@ -39,6 +39,7 @@ struct DeviceConfig {
   String adminUser = "admin";
   String adminPassword;
   bool displayDefaultOn = true;
+  bool speakerDefaultOn = true;
   bool powerSenseEnabled = false;
   bool powerSenseActiveHigh = true;
   uint32_t stableWindowMs = 600;
@@ -51,8 +52,8 @@ struct DeviceConfig {
   uint16_t historyRetentionDays = 730;
   uint16_t historyFileMaxMb = 32;
   uint16_t systemLogFileMaxMb = 8;
-  bool batterySenseEnabled = false;
-  uint16_t batteryDividerMilli = 2000;
+  bool batterySenseEnabled = true;
+  uint16_t batteryDividerMilli = 3000;
   uint16_t batteryMinMv = 3200;
   uint16_t batteryMaxMv = 4200;
   uint16_t batteryCapacityMah = 1200;
@@ -66,6 +67,7 @@ class ConfigStore {
   DeviceConfig &mutableConfig() { return config_; }
   bool saveSettings();
   bool saveDisplayDefaultOn();
+  bool saveSpeakerDefaultOn();
   bool saveHeartbeatRestartSuppressed();
   bool saveRemoteConfigVersion();
   bool saveCalibration(uint8_t channel);

@@ -2,6 +2,7 @@
 build/
 .pio/
 output/playwright/
+firmware/production-gateway/output/playwright/
 .playwright-cli/
 *.bin
 *.elf

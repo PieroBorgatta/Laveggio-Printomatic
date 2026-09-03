@@ -1,5 +1,27 @@
 # Risultati delle prove
 
+## Porting Waveshare ESP32-S3-Touch-LCD-2.8 - 1 settembre 2026
+
+Verifica eseguita senza la nuova scheda fisica:
+
+- `24/24` test Node.js del simulatore superati;
+- build PlatformIO V2/CST3530 completata;
+- build PlatformIO V1/CST328 completata;
+- RAM statica `54.436 / 327.680 byte` (`16,6%`);
+- flash applicazione `1.657.078 / 6.291.456 byte` (`26,3%`);
+- immagini factory e OTA ECDSA-P256 firmate per entrambi i profili;
+- dashboard verificata in Chromium con gli stessi asset incorporati;
+- interruttori display e speaker indipendenti e persistenti nel simulatore;
+- telemetria simulata di touch, speaker, batteria, QMI8658 e PCF85063 visibile;
+- nessun errore JavaScript di esecuzione osservato nel flusso controllato.
+
+La compilazione verifica API e compatibilita software, non il comportamento
+elettrico. ST7789, touch, audio PCM5101, GPIO batteria, RTC, IMU, microSD SD_MMC,
+power hold e I2C esterno devono passare la checklist
+[`friday-hardware-validation.md`](friday-hardware-validation.md) sulla scheda.
+
+## Prove storiche sul precedente prototipo ESP32-C6
+
 ## Ambiente osservato
 
 - Waveshare ESP32-C6-LCD-1.47 collegata via USB-C;

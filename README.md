@@ -5,15 +5,15 @@
 <h1 align="center">Laveggio Printomatic</h1>
 
 <p align="center">
-  Gateway ESP32-C6 per la digitalizzazione non invasiva di un bilico meccanico
+  Gateway ESP32-S3 touch per la digitalizzazione non invasiva di un bilico meccanico
   Laveggio Printomatic del 1965.
 </p>
 
 <p align="center">
-  <img alt="Firmware 1.3.0" src="https://img.shields.io/badge/firmware-1.3.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
-  <img alt="ESP32-C6" src="https://img.shields.io/badge/ESP32--C6-Wi--Fi_6-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.0.0" src="https://img.shields.io/badge/firmware-2.0.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 21 su 21" src="https://img.shields.io/badge/test-21%2F21_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 24 su 24" src="https://img.shields.io/badge/test-24%2F24_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -34,7 +34,8 @@
 
 Laveggio Printomatic legge quattro manopole meccaniche attraverso sensori
 magnetici AS5600, ricostruisce il peso stabile e conserva lo storico su
-microSD. La Waveshare ESP32-C6-LCD-1.47 espone un portale web CaskLogic per
+microSD. La Waveshare ESP32-S3-Touch-LCD-2.8 espone un display capacitivo
+240×320 e un portale web CaskLogic per
 calibrazione, diagnostica, manutenzione e integrazione con il gestionale.
 
 Il sistema non altera la meccanica originale e mantiene sempre disponibile la
@@ -43,19 +44,21 @@ repository contiene firmware, simulatore, contratto di integrazione e
 documentazione hardware.
 
 > [!IMPORTANT]
-> Firmware, portale, Wi-Fi, persistenza del display e aggiornamento OTA firmato
-> sono stati verificati sull'ESP32-C6 reale. Restano da collaudare con l'hardware
-> definitivo microSD FAT32, batteria, commutazione di alimentazione e rollback
-> provocato da un'immagine non avviabile.
+> Il firmware ESP32-S3 V2 e il profilo compatibile V1 compilano e il simulatore
+> web è stato verificato in Chromium. Poiché la nuova scheda non è ancora
+> disponibile, display, touch, speaker, batteria, RTC, IMU e microSD restano da
+> convalidare fisicamente al suo arrivo. Le precedenti prove sull'ESP32-C6 non
+> costituiscono prova del nuovo hardware.
 
 ## ✦ Funzioni
 
 | Area | Funzioni disponibili |
 | --- | --- |
 | **Acquisizione** | Quattro AS5600 isolati tramite PCA9546/TCA9546A, calibrazione di dieci posizioni per manopola, tolleranza, isteresi e stabilità |
-| **Portale web** | Dashboard responsive, display remoto multipagina, calibrazione, storico filtrabile e ordinabile, sistema, assistenza CaskLogic e tema chiaro/scuro |
+| **Interfacce** | Display verticale a card, swipe orizzontale fra cinque pagine, scroll verticale, selezione touch dal footer, dashboard web responsive e tema chiaro/scuro |
 | **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD |
-| **Autodiagnosi** | Test di sensori, microSD, batteria, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore per sensore |
+| **Autodiagnosi** | Test di sensori, microSD, batteria, touch, speaker, IMU, RTC, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore |
+| **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente dal portale web |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
 | **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `LP-PW_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
@@ -68,11 +71,11 @@ non trasforma la microSD in un NAS.
 
 | Pagina | Cosa permette di fare |
 | --- | --- |
-| **Riepilogo** | Leggere peso, stabilità, stato dei quattro sensori, frequenza di scansione, Wi-Fi, microSD, alimentazione e batteria. Lo stato scelto per il display viene salvato e rispettato dopo ogni riavvio. |
+| **Riepilogo** | Leggere peso, stabilità, sensori, Wi-Fi, microSD, alimentazione e batteria. Display e conferma sonora hanno interruttori indipendenti e persistenti. |
 | **Calibrazione** | Associare a ciascuna manopola le dieci posizioni `0–9`, salvare il valore magnetico reale e regolare moltiplicatore, tolleranza e isteresi senza ricompilare il firmware. |
 | **Storico** | Consultare soltanto le 20 pesate più recenti al primo accesso, filtrare e ordinare ogni colonna ed esportare esattamente il risultato dei filtri attivi. |
 | **Rete e gestionale** | Cercare reti Wi-Fi, scegliere DHCP o IP statico, configurare HTTPS/mTLS, HMAC, heartbeat, MQTT TLS e sincronizzazione controllata dal gestionale. |
-| **Sistema** | Gestire display predefinito, NTP, fuso orario, credenziali, retention, dimensione dei file, batteria, log, riavvio e aggiornamento OTA firmato. Un clic breve su BOOT scorre le viste Peso, Sensori, Rete, Sistema e Gestionale; la pressione continua mostra la barra del ripristino da 10 secondi. |
+| **Sistema** | Gestire display, speaker, NTP/RTC, credenziali, retention, batteria, log, riavvio e OTA firmato. Swipe e barra touch cambiano pagina; BOOT breve resta disponibile e la pressione continua mostra il ripristino da 10 secondi. |
 | **Autodiagnosi** | Eseguire prove attive, controllare errori e magneti dei sensori, osservare i grafici giornalieri e scaricare un pacchetto assistenza anonimizzato. |
 | **CaskLogic** | Consultare contatti di assistenza, titolarità, crediti, versione e informazioni legali del dispositivo. |
 
@@ -131,8 +134,8 @@ non viene usata come coda automatica di reinvio.
 
 ![Autodiagnosi Laveggio Printomatic](docs/assets/laveggio-autodiagnosi.png)
 
-La corrente assorbita è indicata come non disponibile perché il bq25185 non
-fornisce telemetria amperometrica. Tensione batteria, temperatura del chip,
+La corrente assorbita è indicata come non disponibile perché la scheda non
+integra un sensore amperometrico. Tensione batteria, temperatura della scheda,
 RSSI e memoria libera sono invece registrabili senza aggiungere altre schede.
 
 ## 🧩 Architettura
@@ -141,30 +144,31 @@ RSSI e memoria libera sono invece registrabili senza aggiungere altre schede.
 flowchart LR
     A[4 manopole] --> B[4 sensori AS5600]
     B --> C[PCA9546 / TCA9546A]
-    C --> D[ESP32-C6]
-    D --> E[Display locale]
-    D --> F[MicroSD 128 GB]
+    C --> D[ESP32-S3 Touch LCD 2.8]
+    D --> E[ST7789 + CST3530/CST328]
+    D --> F[MicroSD SDMMC]
     D --> G[Portale web CaskLogic]
     D -->|HTTPS / mTLS| H[Gestionale]
     D -->|MQTT TLS opzionale| H
-    I[LiPo 1S] --> J[bq25185 + boost 5 V]
-    J --> D
+    I[LiPo 1S] --> D
+    D --> K[PCM5101 + speaker]
+    D --> L[QMI8658 + PCF85063]
 ```
 
 ## 🔩 Hardware
 
 | Componente | Quantità | Riferimento |
 | --- | ---: | --- |
-| Waveshare ESP32-C6-LCD-1.47 | 1 | [Amazon.it · B0DHTMYTCY](https://www.amazon.it/dp/B0DHTMYTCY) |
+| Waveshare ESP32-S3-Touch-LCD-2.8, 16 MB flash / 8 MB PSRAM | 1 | [Documentazione ufficiale](https://docs.waveshare.com/ESP32-S3-Touch-LCD-2.8) |
 | Adafruit PCA9546 / TCA9546A STEMMA QT | 1 | [Amazon.it · B0BSG8KX8L](https://www.amazon.it/dp/B0BSG8KX8L) |
 | Kit moduli AS5600 a 12 bit con magneti | 1 kit | [Amazon.it · B0FH1Y3GLG](https://www.amazon.it/dp/B0FH1Y3GLG) |
 | Cavetti micro JST-SH 1,0 mm, 4 pin | 1 confezione | [Amazon.it · B0BNCHC5Q4](https://www.amazon.it/dp/B0BNCHC5Q4) |
-| **Adafruit bq25185 USB/DC/Solar Charger con boost 5 V, PID 6106** | **1** | **[Amazon.it · B0DXK6YZX8](https://www.amazon.it/dp/B0DXK6YZX8)** |
-| Batteria LiPo AFTERTECH 103040, 1200 mAh | 1 | Polarità JST-PH da verificare prima del collegamento |
-| MicroSD FAT32 | 1 | 128 GB installata |
+| Speaker 8 Ω 2 W 2030 | 1 | Incluso con la scheda Waveshare |
+| Batteria LiPo 3,7 V | 1 | Connettore MX1.25 2 pin; polarità da verificare |
+| MicroSD FAT32 | 1 | La scheda dichiara supporto fino a 16 GB |
 
-Il modulo bq25185 acquistato è la versione con boost TPS61023 a 5 V: non serve
-un convertitore step-up separato. Collegamenti e verifiche elettriche sono
+La nuova Waveshare integra gestione di carica, misura batteria, RTC, IMU,
+codec PCM5101, amplificatore e slot microSD. Collegamenti e verifiche sono
 descritti in [`docs/power-and-ups.md`](docs/power-and-ups.md).
 
 ## 🚀 Avvio rapido
@@ -180,7 +184,7 @@ npm run simulate
 Il portale risponde su `http://127.0.0.1:4177`. Il simulatore usa gli stessi
 file HTML, CSS e JavaScript incorporati nel firmware.
 
-### Build ESP32-C6
+### Build ESP32-S3
 
 ```powershell
 cd firmware/production-gateway
@@ -190,10 +194,10 @@ py -m platformio run
 
 | Risorsa | Utilizzo verificato |
 | --- | ---: |
-| RAM statica | `51.124 / 327.680 byte` · `15,6%` |
-| Flash applicazione | `1.701.906 / 2.031.616 byte` · `83,8%` |
-| Immagine OTA firmata | `1.761.136 byte` |
-| Margine per slot OTA | `263.392 byte` · `13,0%` |
+| RAM statica | `54.436 / 327.680 byte` · `16,6%` |
+| Flash applicazione | `1.657.078 / 6.291.456 byte` · `26,3%` |
+| Profili compilati | V2 `CST3530` e V1 `CST328`, entrambi con autodetect di fallback |
+| Slot OTA | `6 MiB` ciascuno su flash da 16 MB |
 
 Artefatti principali:
 
@@ -229,7 +233,7 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 | Percorso | Contenuto |
 | --- | --- |
-| [`firmware/production-gateway`](firmware/production-gateway/) | Gateway operativo ESP32-C6 e simulatore web |
+| [`firmware/production-gateway`](firmware/production-gateway/) | Gateway operativo ESP32-S3 touch e simulatore web |
 | [`firmware/calibration-reader`](firmware/calibration-reader/) | Firmware diagnostico usato nelle prime prove hardware |
 | [`docs`](docs/) | Cablaggio, alimentazione, sicurezza, test e contratto gestionale |
 | [`stl`](stl/) | Case e supporti stampabili in 3D con licenze separate |
@@ -238,7 +242,8 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [Hardware e distinta materiali](docs/hardware.md)
 - [Cablaggio dei sensori](docs/wiring.md)
-- [Batteria, caricatore e boost 5 V](docs/power-and-ups.md)
+- [Batteria e alimentazione della nuova scheda](docs/power-and-ups.md)
+- [Collaudo hardware al ricevimento](docs/friday-hardware-validation.md)
 - [Architettura operativa](docs/production-architecture.md)
 - [Sicurezza del gateway](docs/security.md)
 - [Firma e rilascio firmware](docs/firmware-signing.md)
@@ -250,9 +255,9 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
-- [x] Test host `21/21` e build ESP32-C6 completati
-- [x] OTA firmato verificato sull'hardware e doppia partizione con margine del `13,3%`
-- [x] Wi-Fi del sito e persistenza del display verificati dopo riavvio
+- [x] Test host `24/24`, browser Chromium e build firmate ESP32-S3 V2/V1 completati
+- [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
+- [ ] Collaudo fisico del nuovo ST7789, touch, speaker, RTC, IMU e batteria
 - [ ] Calibrazione meccanica completa delle quattro manopole
 - [ ] Collaudo reale di microSD FAT32, batteria, commutazione e rollback forzato
 - [ ] Implementazione del contratto nel gestionale CaskLogic
