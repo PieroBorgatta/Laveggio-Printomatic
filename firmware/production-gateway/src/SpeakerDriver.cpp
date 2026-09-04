@@ -46,11 +46,11 @@ bool SpeakerDriver::begin() {
 }
 
 void SpeakerDriver::confirmWeight() {
-  if (enabled_ && ready_ && task_ != nullptr) xTaskNotifyGive(task_);
+  if (enabled_ && ready_ && task_ != nullptr) xTaskNotify(task_, 1, eSetBits);
 }
 
 void SpeakerDriver::testTone() {
-  confirmWeight();
+  if (ready_ && task_ != nullptr) xTaskNotify(task_, 2, eSetBits);
 }
 
 void SpeakerDriver::taskEntry(void *argument) {
@@ -59,8 +59,9 @@ void SpeakerDriver::taskEntry(void *argument) {
 
 void SpeakerDriver::taskLoop() {
   while (true) {
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    if (enabled_) playConfirmation();
+    uint32_t request = 0;
+    xTaskNotifyWait(0, UINT32_MAX, &request, portMAX_DELAY);
+    if ((request & 2U) != 0 || enabled_) playConfirmation();
   }
 }
 

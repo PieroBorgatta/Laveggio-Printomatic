@@ -41,7 +41,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.0.0";
+constexpr char kFirmwareVersion[] = "2.0.1";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -68,7 +68,7 @@ constexpr uint32_t kTimeSyncRetryIntervalMs = 15000;
 constexpr uint32_t kRetentionIntervalMs = 86400000UL;
 constexpr uint32_t kAuthBlockMs = 60000;
 constexpr uint8_t kAuthFailureLimit = 5;
-constexpr char kRescueSsid[] = "PesaLink_casklogic-192_168_4_1";
+constexpr char kRescueSsid[] = "LP-PW_casklogic-192_168_4_1";
 constexpr char kRescuePassword[] = "casklogic";
 constexpr char kAuthRealm[] = "CaskLogic PesaLink v3";
 static_assert(sizeof(kRescueSsid) - 1 <= 32, "Rescue SSID exceeds the Wi-Fi limit");
@@ -2334,6 +2334,16 @@ void registerWebRoutes() {
     if (speakerOn && parseBool(webServer.arg("test"))) speaker.testTone();
     logSystem("info", speakerOn ? "speaker_enabled" : "speaker_disabled", "persisted=true");
     sendJson("{\"ok\":true,\"ready\":" + boolJson(speaker.ready()) + "}");
+  });
+  webServer.on("/api/speaker/test", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (!speaker.ready()) {
+      sendError(409, "Speaker non inizializzato");
+      return;
+    }
+    speaker.testTone();
+    logSystem("info", "speaker_test_requested");
+    sendJson("{\"ok\":true,\"ready\":true}");
   });
 
   webServer.on("/api/calibration/capture", HTTP_POST, [] {

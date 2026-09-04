@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.0.0" src="https://img.shields.io/badge/firmware-2.0.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.0.1" src="https://img.shields.io/badge/firmware-2.0.1-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 24 su 24" src="https://img.shields.io/badge/test-24%2F24_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 25 su 25" src="https://img.shields.io/badge/test-25%2F25_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -61,12 +61,12 @@ documentazione hardware.
 | Area | Funzioni disponibili |
 | --- | --- |
 | **Acquisizione** | Quattro AS5600 isolati tramite PCA9546/TCA9546A, calibrazione di dieci posizioni per manopola, tolleranza, isteresi e stabilità |
-| **Interfacce** | Display verticale a card, swipe orizzontale fra cinque pagine, scroll verticale, selezione touch dal footer, dashboard web responsive e tema chiaro/scuro |
+| **Interfacce** | Display e portale coordinati con la palette CaskLogic antracite, rame e azzurro-salvia; aggiornamenti live incrementali senza ridisegno continuo delle schermate |
 | **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD |
 | **Autodiagnosi** | Test di sensori, microSD, batteria, touch, speaker, IMU, RTC, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore |
-| **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente dal portale web |
+| **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente, con pulsante web indipendente per provarlo subito |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
-| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `PesaLink_casklogic-192_168_4_1` |
+| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza originale `LP-PW_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
 | **Aggiornamenti** | OTA firmato ECDSA-P256, doppia partizione, validazione al riavvio, rollback e registro degli esiti |
 
@@ -77,7 +77,7 @@ non trasforma la microSD in un NAS.
 
 | Pagina | Cosa permette di fare |
 | --- | --- |
-| **Riepilogo** | Leggere peso, stabilità, sensori, Wi-Fi, microSD, alimentazione e batteria. Display e conferma sonora hanno interruttori indipendenti e persistenti. |
+| **Riepilogo** | Leggere peso, stabilità, sensori, Wi-Fi, microSD, alimentazione e batteria. Display e conferma sonora hanno interruttori indipendenti e persistenti; `Prova bip` verifica lo speaker senza cambiare la preferenza. |
 | **Calibrazione** | Associare a ciascuna manopola le dieci posizioni `0–9`, salvare il valore magnetico reale e regolare moltiplicatore, tolleranza e isteresi senza ricompilare il firmware. |
 | **Storico** | Consultare soltanto le 20 pesate più recenti al primo accesso, filtrare e ordinare ogni colonna ed esportare esattamente il risultato dei filtri attivi. |
 | **Rete e gestionale** | Cercare reti Wi-Fi, scegliere DHCP o IP statico, configurare HTTPS/mTLS, HMAC, heartbeat, MQTT TLS e sincronizzazione controllata dal gestionale. |
@@ -212,7 +212,7 @@ py -m platformio run
 | Risorsa | Utilizzo verificato |
 | --- | ---: |
 | RAM statica | `54.436 / 327.680 byte` · `16,6%` |
-| Flash applicazione | `1.657.078 / 6.291.456 byte` · `26,3%` |
+| Flash applicazione | `1.663.674 / 6.291.456 byte` · `26,4%` |
 | Profili compilati | V2 `CST3530` e V1 `CST328`, entrambi con autodetect di fallback |
 | Slot OTA | `6 MiB` ciascuno su flash da 16 MB |
 
@@ -272,7 +272,7 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
-- [x] Test host `24/24`, browser Chromium e build firmate ESP32-S3 V2/V1 completati
+- [x] Test host `25/25`, browser Chromium e build ESP32-S3 completati
 - [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
 - [ ] Collaudo fisico del nuovo ST7789, touch, speaker, RTC, IMU e batteria
 - [ ] Calibrazione meccanica completa delle quattro manopole

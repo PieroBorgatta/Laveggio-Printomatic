@@ -1,5 +1,16 @@
 # Risultati delle prove
 
+## Firmware 2.0.1 e verifica hardware - 4 settembre 2026
+
+- `25/25` test Node.js del simulatore superati;
+- portale verificato nel browser con palette CaskLogic antracite, rame e azzurro-salvia;
+- aggiornamento incrementale dei valori live senza ricostruire card e pannelli;
+- endpoint e pulsante `Prova bip` verificati senza modificare la preferenza persistente dello speaker;
+- build PlatformIO V2/CST3530 completata con RAM statica al `16,6%` e flash applicazione al `26,4%`;
+- caricamento USB riuscito su ESP32-S3 con flash da 16 MB e PSRAM da 8 MB;
+- avvio seriale confermato con `firmware=2.0.1` e access point di recupero attivo;
+- SSID originale ripristinato a `LP-PW_casklogic-192_168_4_1`.
+
 ## Porting Waveshare ESP32-S3-Touch-LCD-2.8 - 1 settembre 2026
 
 Verifica eseguita senza la nuova scheda fisica:
