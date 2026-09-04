@@ -6,7 +6,6 @@
 
 <p align="center">
   Digitalizzazione non invasiva della pesa meccanica Laveggio Printomatic del 1965.<br>
-  Collegamento operativo con la tracciabilita del gestionale CaskLogic Testa&amp;Coda.<br>
   Sistema non fiscale, destinato esclusivamente all'uso interno.
 </p>
 
@@ -292,5 +291,5 @@ Gli STL di terzi mantengono licenza e attribuzione originali, documentate in
 
 <p align="center">
   <strong>CaskLogic Solutions</strong><br>
-  CaskLogic PesaLink · la pesa Laveggio Printomatic nella tracciabilita Testa&amp;Coda
+  CaskLogic PesaLink · preservare la meccanica, rendere misurabile il dato
 </p>
