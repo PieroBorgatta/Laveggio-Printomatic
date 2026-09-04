@@ -16,7 +16,7 @@ non sono valide per transazioni commerciali o verifiche metrologiche legali.
 - display ST7789 240×320 controllabile dal web, con cinque pagine a card, swipe orizzontale, scroll verticale, footer touch e fallback BOOT;
 - touch con autodetect CST3530 per V2 e CST328 per V1;
 - doppio tono su speaker PCM5101 alla conferma della pesata, disabilitabile e persistente dal portale;
-- prova audio manuale dal portale senza modificare lo stato persistente dello speaker;
+- volume speaker persistente da 0 a 100%, applicato sia alla conferma sia alla prova audio manuale;
 - palette copiata dal portale interno del dispositivo e rendering incrementale per eliminare i lampeggiamenti degli aggiornamenti live;
 - monitoraggio integrato di batteria GPIO8, QMI8658 e RTC PCF85063;
 - storico e log NDJSON settimanali in cartelle anno/mese su microSD FAT32;
@@ -67,10 +67,10 @@ Artefatti principali:
 - `.pio/build/<profilo>/firmware.factory.bin`: prima installazione completa,
   da usare quando si passa dalla vecchia ESP32-C6 alla ESP32-S3.
 
-Misure della build `2.0.3` verificata il 4 settembre 2026 sul profilo Waveshare V2:
+Misure della build `2.0.4` verificata il 4 settembre 2026 sul profilo Waveshare V2:
 
-- RAM statica: `54.436 / 327.680 byte` (`16,6%`);
-- flash applicazione: `1.664.406 / 6.291.456 byte` (`26,5%`).
+- RAM statica: `54.444 / 327.680 byte` (`16,6%`);
+- flash applicazione: `1.667.682 / 6.291.456 byte` (`26,5%`).
 
 Le due partizioni OTA occupano `0x600000` byte, cioe 6 MiB ciascuna, sulla flash
 da 16 MB. La partizione SPIFFS e stata rimossa perche gli asset web sono

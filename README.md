@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.0.3" src="https://img.shields.io/badge/firmware-2.0.3-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.0.4" src="https://img.shields.io/badge/firmware-2.0.4-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 26 su 26" src="https://img.shields.io/badge/test-26%2F26_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 27 su 27" src="https://img.shields.io/badge/test-27%2F27_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -50,11 +50,10 @@ documentazione hardware.
 > fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
-> Il firmware ESP32-S3 V2 e il profilo compatibile V1 compilano e il simulatore
-> web è stato verificato in Chromium. Poiché la nuova scheda non è ancora
-> disponibile, display, touch, speaker, batteria, RTC, IMU e microSD restano da
-> convalidare fisicamente al suo arrivo. Le precedenti prove sull'ESP32-C6 non
-> costituiscono prova del nuovo hardware.
+> Il firmware ESP32-S3 V2 è stato compilato, caricato e avviato sulla scheda
+> Waveshare collegata. Speaker PCM5101 e microSD SDXC da 128 GB sono stati
+> verificati fisicamente; touch, batteria, RTC, IMU e calibrazione completa dei
+> sensori richiedono ancora il collaudo finale sulla pesa.
 
 ## ✦ Funzioni
 
@@ -64,7 +63,7 @@ documentazione hardware.
 | **Interfacce** | Display e portale con la stessa palette interna blu `#243b6b`, fondo `#f5f7fa`, pannelli bianchi e testo antracite; boot di 10 secondi con logo centrale e barra; aggiornamenti live incrementali |
 | **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD FAT32, incluse SDXC da 128 GB |
 | **Autodiagnosi** | Test di sensori, microSD, batteria, touch, speaker, IMU, RTC, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore |
-| **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente; il test web emette un singolo bip breve, azzera il DMA e disattiva fisicamente le linee I2S |
+| **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente; volume 0–100% regolabile dal portale; il test web emette un singolo bip breve, azzera il DMA e disattiva fisicamente le linee I2S |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
 | **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza originale `LP-PW_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
@@ -77,7 +76,7 @@ non trasforma la microSD in un NAS.
 
 | Pagina | Cosa permette di fare |
 | --- | --- |
-| **Riepilogo** | Leggere peso, stabilità, sensori, Wi-Fi, microSD, alimentazione e batteria. Display e conferma sonora hanno interruttori indipendenti e persistenti; `Prova bip` verifica lo speaker senza cambiare la preferenza. |
+| **Riepilogo** | Leggere peso, stabilità, sensori, Wi-Fi, microSD, alimentazione e batteria. Display e conferma sonora hanno interruttori indipendenti e persistenti; il volume 0–100% vale sia per la conferma sia per `Prova bip`. |
 | **Calibrazione** | Associare a ciascuna manopola le dieci posizioni `0–9`, salvare il valore magnetico reale e regolare moltiplicatore, tolleranza e isteresi senza ricompilare il firmware. |
 | **Storico** | Consultare soltanto le 20 pesate più recenti al primo accesso, filtrare e ordinare ogni colonna ed esportare esattamente il risultato dei filtri attivi. |
 | **Rete e gestionale** | Cercare reti Wi-Fi, scegliere DHCP o IP statico, configurare HTTPS/mTLS, HMAC, heartbeat, MQTT TLS e sincronizzazione controllata dal gestionale. |

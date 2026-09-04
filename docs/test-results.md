@@ -1,15 +1,16 @@
 # Risultati delle prove
 
-## Firmware 2.0.3 e verifica hardware - 4 settembre 2026
+## Firmware 2.0.4 e verifica hardware - 4 settembre 2026
 
-- `26/26` test Node.js del simulatore superati;
-- portale e display riallineati alla palette chiara dell'interfaccia interna del dispositivo: blu `#243b6b`, fondo `#f5f7fa`, pannelli bianchi e testo `#1a2430`;
+- `27/27` test Node.js del simulatore superati;
+- corretto l'ordine dei byte RGB565 sul bus del display: il blu `#243b6b`, il fondo `#f5f7fa`, i pannelli bianchi e il testo antracite non vengono piu trasformati in oro, verde e viola;
+- volume PCM5101 regolabile dal portale tra 0 e 100%, persistente e condiviso da conferma sonora e bip di prova;
 - boot display di 10 secondi con logo CaskLogic centrale e barra di avanzamento;
 - aggiornamento incrementale dei valori live senza ricostruire card e pannelli;
 - endpoint e pulsante `Prova bip` limitati a un singolo suono breve; DMA in auto-clear, canale eliminato a fine suono e linee I2S portate a zero;
 - build PlatformIO V2/CST3530 completata con RAM statica al `16,6%` e flash applicazione al `26,5%`;
 - caricamento USB riuscito su ESP32-S3 con flash da 16 MB e PSRAM da 8 MB;
-- avvio seriale confermato con `firmware=2.0.3` e access point di recupero attivo;
+- avvio seriale confermato con `firmware=2.0.4` e access point di recupero attivo;
 - SSID originale ripristinato a `LP-PW_casklogic-192_168_4_1`.
 - microSD SDXC da 128 GB montata e verificata (`121942 MB` fisici, `121911 MB` filesystem) senza piu conflitti sul clock SD_MMC.
 

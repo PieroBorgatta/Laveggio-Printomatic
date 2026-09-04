@@ -59,6 +59,11 @@
               <span><strong>Conferma sonora</strong><small>Doppio tono quando la pesata è confermata</small></span>
               <input type="checkbox" id="speaker-toggle"><span class="switch"></span>
             </label>
+            <label class="volume-control" for="speaker-volume">
+              <span><strong>Volume</strong><small>Vale anche per il bip di prova</small></span>
+              <span class="volume-value" id="speaker-volume-value">100%</span>
+              <input id="speaker-volume" type="range" min="0" max="100" step="5" value="100">
+            </label>
             <button class="button audio-test" id="speaker-test" type="button"><span>Prova bip</span><small>Riproduce un solo bip breve</small></button>
           </div>
         </div>

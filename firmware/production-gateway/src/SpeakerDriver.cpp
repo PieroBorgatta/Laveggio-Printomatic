@@ -19,6 +19,10 @@ bool SpeakerDriver::begin() {
   return ready_;
 }
 
+void SpeakerDriver::setVolume(uint8_t percent) {
+  volumePercent_ = min<uint8_t>(percent, 100);
+}
+
 bool SpeakerDriver::initializeChannel() {
   if (txChannel_ != nullptr) return true;
   i2s_chan_config_t channelConfig = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
@@ -88,6 +92,7 @@ void SpeakerDriver::playTestTone() {
 
 void SpeakerDriver::playTone(uint16_t frequency, uint16_t durationMs, uint8_t amplitude) {
   if (!initializeChannel()) return;
+  const uint16_t scaledAmplitude = static_cast<uint16_t>(amplitude) * volumePercent_ / 100;
   constexpr size_t kFrames = 128;
   int16_t samples[kFrames * 2];
   const uint32_t totalFrames = kSampleRate * durationMs / 1000;
@@ -96,7 +101,7 @@ void SpeakerDriver::playTone(uint16_t frequency, uint16_t durationMs, uint8_t am
     const size_t frameCount = min<uint32_t>(kFrames, totalFrames - writtenFrames);
     for (size_t frame = 0; frame < frameCount; ++frame) {
       const float phase = kTwoPi * frequency * (writtenFrames + frame) / kSampleRate;
-      const int16_t value = static_cast<int16_t>(sinf(phase) * amplitude * 256);
+      const int16_t value = static_cast<int16_t>(sinf(phase) * scaledAmplitude * 256);
       samples[frame * 2] = value;
       samples[frame * 2 + 1] = value;
     }

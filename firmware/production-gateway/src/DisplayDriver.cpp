@@ -124,7 +124,7 @@ void DisplayDriver::fillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t he
   const uint8_t high = color >> 8;
   const uint8_t low = color;
   for (uint32_t index = 0; index < static_cast<uint32_t>(width) * height; ++index) {
-    SPI.transfer(high); SPI.transfer(low);
+    SPI.transfer(low); SPI.transfer(high);
   }
   digitalWrite(kLcdCs, HIGH);
   SPI.endTransaction();
@@ -146,7 +146,7 @@ void DisplayDriver::drawLogo(uint16_t x, uint16_t y) {
     const bool navy = (pgm_read_byte(DISPLAY_LOGO_NAVY + index / 8) & bit) != 0;
     const bool teal = (pgm_read_byte(DISPLAY_LOGO_TEAL + index / 8) & bit) != 0;
     const uint16_t pixel = teal ? kTeal : (navy ? kBlue : kSurface);
-    SPI.transfer(pixel >> 8); SPI.transfer(pixel);
+    SPI.transfer(pixel); SPI.transfer(pixel >> 8);
   }
   digitalWrite(kLcdCs, HIGH);
   SPI.endTransaction();
@@ -169,7 +169,7 @@ void DisplayDriver::drawText(int x, int y, const char *text, uint8_t scale, uint
       const uint8_t column = (pixelX / scale) % 6U;
       const uint8_t *glyph = glyphFor(text[character]);
       const uint16_t pixel = column < 5 && (glyph[column] & (1U << row)) ? color : background;
-      SPI.transfer(pixel >> 8); SPI.transfer(pixel);
+      SPI.transfer(pixel); SPI.transfer(pixel >> 8);
     }
   }
   digitalWrite(kLcdCs, HIGH);

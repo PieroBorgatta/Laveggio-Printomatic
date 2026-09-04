@@ -68,6 +68,7 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   }
   config_.displayDefaultOn = preferences_.getBool("display_on", true);
   config_.speakerDefaultOn = preferences_.getBool("speaker_on", true);
+  config_.speakerVolumePercent = min<uint8_t>(preferences_.getUChar("speaker_vol", 100), 100);
   config_.powerSenseEnabled = preferences_.getBool("pwr_sense", false);
   config_.powerSenseActiveHigh = preferences_.getBool("pwr_high", true);
   config_.stableWindowMs = preferences_.getUInt("stable_ms", 600);
@@ -167,6 +168,7 @@ bool ConfigStore::saveSettings() {
   preferences_.putString("admin_pass", config_.adminPassword);
   preferences_.putBool("display_on", config_.displayDefaultOn);
   preferences_.putBool("speaker_on", config_.speakerDefaultOn);
+  preferences_.putUChar("speaker_vol", config_.speakerVolumePercent);
   preferences_.putBool("pwr_sense", config_.powerSenseEnabled);
   preferences_.putBool("pwr_high", config_.powerSenseActiveHigh);
   preferences_.putUInt("stable_ms", config_.stableWindowMs);
@@ -193,6 +195,11 @@ bool ConfigStore::saveDisplayDefaultOn() {
 
 bool ConfigStore::saveSpeakerDefaultOn() {
   return preferences_.putBool("speaker_on", config_.speakerDefaultOn) > 0;
+}
+
+bool ConfigStore::saveSpeakerVolume() {
+  preferences_.putUChar("speaker_vol", config_.speakerVolumePercent);
+  return true;
 }
 
 bool ConfigStore::saveHeartbeatRestartSuppressed() {

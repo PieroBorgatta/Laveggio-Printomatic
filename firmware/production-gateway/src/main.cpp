@@ -41,7 +41,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.0.3";
+constexpr char kFirmwareVersion[] = "2.0.4";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -1459,6 +1459,7 @@ String buildStatusJson() {
   json += ",\"display_on\":" + boolJson(displayOn);
   json += ",\"speaker_on\":" + boolJson(speakerOn);
   json += ",\"speaker_ready\":" + boolJson(speaker.ready());
+  json += ",\"speaker_volume_percent\":" + String(config.speakerVolumePercent);
   json += ",\"scan_rate_hz\":" + String(scansPerSecond);
   json += ",\"network\":{\"connected\":" + boolJson(WiFi.status() == WL_CONNECTED);
   json += ",\"ssid\":" + quoted(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "");
@@ -1605,6 +1606,7 @@ String buildSettingsJson() {
   json += ",\"admin_user\":" + quoted(config.adminUser);
   json += ",\"display_default_on\":" + boolJson(config.displayDefaultOn);
   json += ",\"speaker_default_on\":" + boolJson(config.speakerDefaultOn);
+  json += ",\"speaker_volume_percent\":" + String(config.speakerVolumePercent);
   json += ",\"power_sense_enabled\":" + boolJson(config.powerSenseEnabled);
   json += ",\"history_enabled\":" + boolJson(config.historyEnabled);
   json += ",\"history_keep_forever\":" + boolJson(config.historyKeepForever);
@@ -2351,6 +2353,33 @@ void registerWebRoutes() {
     logSystem("info", "speaker_test_requested");
     sendJson("{\"ok\":true,\"ready\":true}");
   });
+  webServer.on("/api/speaker/volume", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (!webServer.hasArg("volume")) {
+      sendError(400, "Parametro volume mancante");
+      return;
+    }
+    const String value = webServer.arg("volume");
+    for (size_t index = 0; index < value.length(); ++index) {
+      if (!isDigit(value[index])) {
+        sendError(400, "Il volume deve essere compreso tra 0 e 100");
+        return;
+      }
+    }
+    const int volume = value.toInt();
+    if (value.isEmpty() || volume < 0 || volume > 100) {
+      sendError(400, "Il volume deve essere compreso tra 0 e 100");
+      return;
+    }
+    configStore.mutableConfig().speakerVolumePercent = static_cast<uint8_t>(volume);
+    if (!configStore.saveSpeakerVolume()) {
+      sendError(500, "Impossibile salvare il volume");
+      return;
+    }
+    speaker.setVolume(static_cast<uint8_t>(volume));
+    logSystem("info", "speaker_volume_changed", "percent=" + String(volume));
+    sendJson("{\"ok\":true,\"volume\":" + String(volume) + "}");
+  });
 
   webServer.on("/api/calibration/capture", HTTP_POST, [] {
     if (!authorized()) return;
@@ -2886,6 +2915,7 @@ void setup() {
   speakerOn = configStore.get().speakerDefaultOn;
   speaker.begin();
   speaker.setEnabled(speakerOn);
+  speaker.setVolume(configStore.get().speakerVolumePercent);
   initializeStorage();
 
   Serial.printf("Rescue AP: %s\n", kRescueSsid);
