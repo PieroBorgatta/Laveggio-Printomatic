@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.0.4" src="https://img.shields.io/badge/firmware-2.0.4-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.0.5" src="https://img.shields.io/badge/firmware-2.0.5-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 27 su 27" src="https://img.shields.io/badge/test-27%2F27_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 28 su 28" src="https://img.shields.io/badge/test-28%2F28_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">

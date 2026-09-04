@@ -41,7 +41,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.0.4";
+constexpr char kFirmwareVersion[] = "2.0.5";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -2198,13 +2198,13 @@ void registerWebRoutes() {
   webServer.on("/app.css", HTTP_GET, [] {
     if (!authorized()) return;
     sendSecurityHeaders();
-    webServer.sendHeader("Cache-Control", "public, max-age=3600");
+    webServer.sendHeader("Cache-Control", "no-store");
     webServer.send_P(200, "text/css; charset=utf-8", WEB_APP_CSS);
   });
   webServer.on("/app.js", HTTP_GET, [] {
     if (!authorized()) return;
     sendSecurityHeaders();
-    webServer.sendHeader("Cache-Control", "public, max-age=3600");
+    webServer.sendHeader("Cache-Control", "no-store");
     webServer.send_P(200, "application/javascript; charset=utf-8", WEB_APP_JS);
   });
   webServer.on("/casklogicmark.png", HTTP_GET, [] {
