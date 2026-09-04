@@ -8,7 +8,7 @@ richiedono la Waveshare fisica.
 1. Leggere sulla scheda se e V2/CST3530 o V1/CST328 e scegliere il relativo
    file factory.
 2. Controllare polarita della LiPo MX1.25 e continuita di tutti i cavi I2C.
-3. Inserire a dispositivo spento una microSD FAT32 non superiore a 16 GB.
+3. Inserire a dispositivo spento una microSD FAT32; sono supportate anche SDXC da 128 GB se riformattate FAT32 (exFAT non è supportato dal runtime Arduino).
 4. Collegare inizialmente solo USB-C, senza batteria, multiplexer o sensori.
 5. Se si usa l'antenna esterna, verificare che pigtail e antenna siano SMA
    standard e non RP-SMA; modificare la resistenza RF solo a scheda spenta.

@@ -61,7 +61,8 @@ void SpeakerDriver::taskLoop() {
   while (true) {
     uint32_t request = 0;
     xTaskNotifyWait(0, UINT32_MAX, &request, portMAX_DELAY);
-    if ((request & 2U) != 0 || enabled_) playConfirmation();
+    if ((request & 2U) != 0) playTestTone();
+    else if ((request & 1U) != 0 && enabled_) playConfirmation();
   }
 }
 
@@ -69,6 +70,12 @@ void SpeakerDriver::playConfirmation() {
   playTone(880, 105, 34);
   vTaskDelay(pdMS_TO_TICKS(35));
   playTone(1320, 150, 40);
+  stopOutput();
+}
+
+void SpeakerDriver::playTestTone() {
+  playTone(1000, 140, 34);
+  stopOutput();
 }
 
 void SpeakerDriver::playTone(uint16_t frequency, uint16_t durationMs, uint8_t amplitude) {
@@ -98,4 +105,13 @@ void SpeakerDriver::playTone(uint16_t frequency, uint16_t durationMs, uint8_t am
   memset(samples, 0, sizeof(samples));
   size_t bytesWritten = 0;
   i2s_channel_write(txChannel_, samples, sizeof(samples), &bytesWritten, pdMS_TO_TICKS(50));
+}
+
+void SpeakerDriver::stopOutput() {
+  if (txChannel_ == nullptr) return;
+  // Arresta anche il DMA: alcuni DAC PCM5101 mantengono l'ultimo campione
+  // quando il flusso I2S resta attivo dopo un suono molto breve.
+  i2s_channel_disable(txChannel_);
+  vTaskDelay(pdMS_TO_TICKS(2));
+  i2s_channel_enable(txChannel_);
 }

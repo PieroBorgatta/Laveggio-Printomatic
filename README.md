@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.0.1" src="https://img.shields.io/badge/firmware-2.0.1-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.0.2" src="https://img.shields.io/badge/firmware-2.0.2-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 25 su 25" src="https://img.shields.io/badge/test-25%2F25_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 26 su 26" src="https://img.shields.io/badge/test-26%2F26_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -61,10 +61,10 @@ documentazione hardware.
 | Area | Funzioni disponibili |
 | --- | --- |
 | **Acquisizione** | Quattro AS5600 isolati tramite PCA9546/TCA9546A, calibrazione di dieci posizioni per manopola, tolleranza, isteresi e stabilità |
-| **Interfacce** | Display e portale coordinati con la palette CaskLogic antracite, rame e azzurro-salvia; aggiornamenti live incrementali senza ridisegno continuo delle schermate |
-| **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD |
+| **Interfacce** | Display e portale con gli stessi colori delle sezioni interne di CaskLogic; boot di 10 secondi con logo centrale e barra di caricamento; aggiornamenti live incrementali senza ridisegno continuo |
+| **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD FAT32, incluse SDXC da 128 GB |
 | **Autodiagnosi** | Test di sensori, microSD, batteria, touch, speaker, IMU, RTC, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore |
-| **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente, con pulsante web indipendente per provarlo subito |
+| **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente; il test web emette un singolo bip breve con arresto forzato del flusso I2S |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
 | **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza originale `LP-PW_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |

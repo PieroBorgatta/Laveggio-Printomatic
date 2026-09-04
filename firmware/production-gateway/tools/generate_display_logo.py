@@ -8,8 +8,8 @@ from PIL import Image
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 SOURCE = PROJECT_DIR / "data" / "casklogicmark.png"
 OUTPUT = PROJECT_DIR / "include" / "DisplayLogo.h"
-WIDTH = 56
-HEIGHT = 56
+WIDTH = 80
+HEIGHT = 80
 NAVY = (23, 50, 77)
 TEAL = (47, 143, 157)
 
@@ -51,8 +51,8 @@ generated = """// Generated from data/casklogicmark.png. Do not edit manually.
 
 #include <Arduino.h>
 
-inline constexpr uint8_t DISPLAY_LOGO_WIDTH = 56;
-inline constexpr uint8_t DISPLAY_LOGO_HEIGHT = 56;
+inline constexpr uint8_t DISPLAY_LOGO_WIDTH = 80;
+inline constexpr uint8_t DISPLAY_LOGO_HEIGHT = 80;
 """
 generated += array("DISPLAY_LOGO_NAVY", navy_mask)
 generated += array("DISPLAY_LOGO_TEAL", teal_mask)

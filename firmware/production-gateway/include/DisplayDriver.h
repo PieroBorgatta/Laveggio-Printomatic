@@ -45,6 +45,7 @@ class DisplayDriver {
  public:
   void begin();
   void setEnabled(bool enabled);
+  void showBootSplash(uint32_t durationMs = 10000);
   bool enabled() const { return enabled_; }
   bool touchAvailable() const { return touchController_ != 0; }
   const char *touchControllerName() const {

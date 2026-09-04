@@ -67,10 +67,10 @@ Artefatti principali:
 - `.pio/build/<profilo>/firmware.factory.bin`: prima installazione completa,
   da usare quando si passa dalla vecchia ESP32-C6 alla ESP32-S3.
 
-Misure della build `2.0.1` verificata il 4 settembre 2026 sul profilo Waveshare V2:
+Misure della build `2.0.2` verificata il 4 settembre 2026 sul profilo Waveshare V2:
 
 - RAM statica: `54.436 / 327.680 byte` (`16,6%`);
-- flash applicazione: `1.663.674 / 6.291.456 byte` (`26,4%`).
+- flash applicazione: `1.667.118 / 6.291.456 byte` (`26,5%`).
 
 Le due partizioni OTA occupano `0x600000` byte, cioe 6 MiB ciascuna, sulla flash
 da 16 MB. La partizione SPIFFS e stata rimossa perche gli asset web sono

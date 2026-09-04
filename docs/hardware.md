@@ -14,7 +14,7 @@
 | Grani M5 x 12 mm con punta, inox A2, DIN 914 / ISO 4027 | 1 confezione da 20 | [Amazon.it - B0BZD8WXDQ](https://www.amazon.it/dp/B0BZD8WXDQ) |
 | Speaker 8 ohm 2 W 2030 | 1 | Incluso con la Waveshare |
 | Batteria LiPo 3,7 V protetta | 1 | Connettore MX1.25 2 pin, polarita da verificare |
-| MicroSD FAT32 | 1 | Capacita dichiarata dalla scheda fino a 16 GB |
+| MicroSD FAT32 | 1 | Verificata fino a 128 GB; le SDXC devono essere riformattate FAT32, non exFAT |
 
 Le inserzioni commerciali possono cambiare: prima di alimentare verificare
 sempre serigrafia, tensione, connettore e polarita del componente ricevuto.

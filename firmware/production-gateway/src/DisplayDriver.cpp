@@ -32,9 +32,11 @@ constexpr uint16_t kTeal = 0x7D15;         // #7fa3ae
 constexpr uint16_t kWhite = 0xFFFF;
 constexpr uint16_t kText = 0xF7BF;         // #f3f7fb
 constexpr uint16_t kSurface = 0x1106;      // #132033
-constexpr uint16_t kSurfaceBlue = 0x1968;  // #1d2c42
+constexpr uint16_t kSurfaceBlue = 0x1927;  // #182538
+constexpr uint16_t kBorder = 0x4350;       // #466a86
 constexpr uint16_t kMuted = 0x9557;        // #94a8bb
 constexpr uint16_t kGreen = 0x7D15;        // #7fa3ae
+constexpr uint16_t kGreenLight = 0xAE3A;   // #aac7d0
 constexpr uint16_t kGreenSurface = 0x11C5;
 constexpr uint16_t kAmber = 0xD50E;        // #d4a073
 constexpr uint16_t kAmberSurface = 0x3963;
@@ -143,7 +145,7 @@ void DisplayDriver::drawLogo(uint16_t x, uint16_t y) {
     const uint8_t bit = 1U << (7 - index % 8);
     const bool navy = (pgm_read_byte(DISPLAY_LOGO_NAVY + index / 8) & bit) != 0;
     const bool teal = (pgm_read_byte(DISPLAY_LOGO_TEAL + index / 8) & bit) != 0;
-    const uint16_t pixel = teal ? kTeal : (navy ? kNavy : kWhite);
+    const uint16_t pixel = teal ? kGreenLight : (navy ? kText : kSurface);
     SPI.transfer(pixel >> 8); SPI.transfer(pixel);
   }
   digitalWrite(kLcdCs, HIGH);
@@ -317,16 +319,45 @@ void DisplayDriver::drawFooter() {
 }
 
 void DisplayDriver::drawPageFrame(const char *title) {
-  fillRect(0, 0, kWidth, kHeight, kNavy); fillRect(0, 0, kWidth, 50, kNavy); fillRect(0, 46, kWidth, 4, kBlue);
+  fillRect(0, 0, kWidth, kHeight, kSurface); fillRect(0, 0, kWidth, 50, kNavy); fillRect(0, 46, kWidth, 4, kBlue);
   drawText(12, 10, "CASKLOGIC", 2, kWhite, kNavy); drawText(12, 30, title, 1, kLightBlue, kNavy);
   char pageLabel[8]; snprintf(pageLabel, sizeof(pageLabel), "%u/%u", page_ + 1, kPageCount);
   drawText(198, 18, pageLabel, 1, kWhite, kNavy); drawFooter();
 }
 
+void DisplayDriver::showBootSplash(uint32_t durationMs) {
+  if (!enabled_) return;
+  if (durationMs == 0) durationMs = 1;
+  fillRect(0, 0, kWidth, kHeight, kSurface);
+  const uint16_t logoX = (kWidth - DISPLAY_LOGO_WIDTH) / 2;
+  drawLogo(logoX, 70);
+  drawText(66, 166, "CASKLOGIC", 2, kText, kSurface);
+  drawText(96, 190, "PESALINK", 1, kGreenLight, kSurface);
+  drawText(78, 238, "AVVIO IN CORSO", 1, kMuted, kSurface);
+  fillCard(26, 260, 188, 14, kBorder);
+  fillCard(28, 262, 184, 10, kNavy);
+
+  const uint32_t startedAt = millis();
+  uint16_t lastWidth = 0;
+  while (millis() - startedAt < durationMs) {
+    const uint32_t elapsed = millis() - startedAt;
+    const uint16_t width = std::min<uint16_t>(184, static_cast<uint16_t>((elapsed * 184ULL) / durationMs));
+    if (width > lastWidth) {
+      fillRect(28 + lastWidth, 262, width - lastWidth, 10, kBlue);
+      lastWidth = width;
+    }
+    delay(20);
+  }
+  if (lastWidth < 184) fillRect(28 + lastWidth, 262, 184 - lastWidth, 10, kBlue);
+  lastRenderMs_ = 0;
+  lastWeightKg_ = UINT32_MAX;
+  pageDirty_ = true;
+}
+
 void DisplayDriver::drawFrame() {
   drawPageFrame("PESATURA LIVE"); fillCard(10, 61, 220, 108, kSurfaceBlue);
   drawText(22, 72, "PESO RILEVATO", 1, kMuted, kSurfaceBlue); drawText(184, 143, "KG", 2, kMuted, kSurfaceBlue);
-  drawText(36, 179, "USO INTERNO - NON FISCALE", 1, kMuted, kNavy); lastWeightKg_ = UINT32_MAX; pageDirty_ = false;
+  drawText(36, 179, "USO INTERNO - NON FISCALE", 1, kMuted, kSurface); lastWeightKg_ = UINT32_MAX; pageDirty_ = false;
 }
 
 void DisplayDriver::drawStatusRow(uint16_t y, const char *label, const String &value, uint16_t color) {
@@ -434,7 +465,7 @@ void DisplayDriver::drawWeightPage(const laveggio::SensorReading readings[lavegg
 }
 
 void DisplayDriver::drawSensorsPage(const laveggio::SensorReading readings[laveggio::kChannelCount]) {
-  if (pageDirty_) { drawPageFrame("SENSORI AS5600"); fillRect(0, 50, kWidth, 242, kNavy); }
+  if (pageDirty_) { drawPageFrame("SENSORI AS5600"); fillRect(0, 50, kWidth, 242, kSurface); }
   const uint8_t first = std::min<uint8_t>(scrollRow_, 1);
   for (uint8_t visible = 0; visible < 4 && first + visible < laveggio::kChannelCount; ++visible) {
     const uint8_t channel = first + visible; const uint16_t y = 58 + visible * 57;
@@ -450,7 +481,7 @@ void DisplayDriver::drawSensorsPage(const laveggio::SensorReading readings[laveg
 }
 
 void DisplayDriver::drawNetworkPage(const DisplayStatus &status) {
-  if (pageDirty_) { drawPageFrame("RETE E SINCRONIA"); fillRect(0, 50, kWidth, 242, kNavy); }
+  if (pageDirty_) { drawPageFrame("RETE E SINCRONIA"); fillRect(0, 50, kWidth, 242, kSurface); }
   struct Row { const char *label; String value; uint16_t color; } rows[] = {
     {"STATO", status.wifiConnected ? "CONNESSA" : (status.accessPointActive ? "ACCESS POINT" : "OFFLINE"), status.wifiConnected ? kGreen : kAmber},
     {"SSID", status.ssid, kText}, {"INDIRIZZO", status.ipAddress, kText},
@@ -464,7 +495,7 @@ void DisplayDriver::drawNetworkPage(const DisplayStatus &status) {
 }
 
 void DisplayDriver::drawSystemPage(const DisplayStatus &status) {
-  if (pageDirty_) { drawPageFrame("SISTEMA E BATTERIA"); fillRect(0, 50, kWidth, 242, kNavy); }
+  if (pageDirty_) { drawPageFrame("SISTEMA E BATTERIA"); fillRect(0, 50, kWidth, 242, kSurface); }
   const uint16_t batteryBackground = status.batteryConfigured ? kGreenSurface : kSurface; fillCard(10, 58, 220, 64, batteryBackground);
   drawText(20, 68, "BATTERIA", 1, kMuted, batteryBackground); char battery[28];
   if (status.batteryConfigured) snprintf(battery, sizeof(battery), "%U%%  %U MV", status.batteryPercent, status.batteryVoltageMv); else snprintf(battery, sizeof(battery), "NON RILEVATA");
@@ -485,7 +516,7 @@ void DisplayDriver::drawSystemPage(const DisplayStatus &status) {
 }
 
 void DisplayDriver::drawServicesPage(const DisplayStatus &status) {
-  if (pageDirty_) { drawPageFrame("SERVIZI CASKLOGIC"); fillRect(0, 50, kWidth, 242, kNavy); }
+  if (pageDirty_) { drawPageFrame("SERVIZI CASKLOGIC"); fillRect(0, 50, kWidth, 242, kSurface); }
   struct Row { const char *label; String value; uint16_t color; } rows[] = {
     {"API", !status.integrationConfigured ? "NON CONFIGURATA" : (status.integrationOnline ? "ONLINE" : "OFFLINE"), status.integrationOnline ? kGreen : kAmber},
     {"MQTT", !status.mqttEnabled ? "DISATTIVO" : (status.mqttConnected ? "CONNESSO" : "OFFLINE"), status.mqttConnected ? kGreen : kAmber},

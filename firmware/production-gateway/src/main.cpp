@@ -41,7 +41,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.0.1";
+constexpr char kFirmwareVersion[] = "2.0.2";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -135,6 +135,7 @@ bool sdReady = false;
 bool accessPointActive = false;
 bool displayOn = false;
 bool speakerOn = true;
+uint32_t lastSpeakerTestMs = 0;
 bool integrationLastOk = false;
 bool otaSucceeded = false;
 bool otaSignatureVerified = false;
@@ -413,7 +414,6 @@ std::vector<String> listNdjsonFiles(const char *directory, const char *prefix) {
 
 void appendLine(const String &path, const String &line, uint32_t maxBytes) {
   if (!sdReady) return;
-  digitalWrite(14, HIGH);
   rotateLogIfNeeded(path, maxBytes);
   File file = SD.open(path, FILE_APPEND);
   if (!file) return;
@@ -2341,6 +2341,12 @@ void registerWebRoutes() {
       sendError(409, "Speaker non inizializzato");
       return;
     }
+    const uint32_t now = millis();
+    if (lastSpeakerTestMs != 0 && now - lastSpeakerTestMs < 1000) {
+      sendError(429, "Attendere la fine del bip di prova");
+      return;
+    }
+    lastSpeakerTestMs = now;
     speaker.testTone();
     logSystem("info", "speaker_test_requested");
     sendJson("{\"ok\":true,\"ready\":true}");
@@ -2768,10 +2774,33 @@ void initializeIdentity() {
 void initializeStorage() {
   pinMode(kSdData3, OUTPUT);
   digitalWrite(kSdData3, HIGH);
-  delay(10);
-  sdReady = SD_MMC.setPins(kSdClock, kSdCommand, kSdData0, -1, -1, -1) &&
-    SD_MMC.begin("/sdcard", true, false);
-  if (sdReady) ensureSdDirectories();
+  delay(30);
+  if (!SD_MMC.setPins(kSdClock, kSdCommand, kSdData0, -1, -1, -1)) {
+    Serial.println("MicroSD: configurazione pin fallita");
+    sdReady = false;
+    return;
+  }
+
+  // Le SDXC da 64/128 GB sono piu sensibili all'integrita del segnale sullo
+  // slot integrato. Prova prima 20 MHz e poi 10 MHz, sempre in bus a 1 bit.
+  constexpr int kSdFrequencies[] = {20000, 10000};
+  for (const int frequencyKhz : kSdFrequencies) {
+    sdReady = SD_MMC.begin("/sdcard", true, false, frequencyKhz, 8);
+    if (sdReady && SD_MMC.cardType() != CARD_NONE) break;
+    SD_MMC.end();
+    sdReady = false;
+    delay(120);
+  }
+  if (!sdReady) {
+    Serial.println("MicroSD: non montata; usare FAT32 (exFAT non supportato dal runtime Arduino)");
+    return;
+  }
+  Serial.printf(
+    "MicroSD: montata, capacita=%llu MB, filesystem=%llu MB\n",
+    SD_MMC.cardSize() / (1024ULL * 1024ULL),
+    SD_MMC.totalBytes() / (1024ULL * 1024ULL)
+  );
+  ensureSdDirectories();
 }
 
 void validatePendingOta() {
@@ -2851,6 +2880,8 @@ void setup() {
 
   display.begin();
   displayOn = configStore.get().displayDefaultOn;
+  display.setEnabled(true);
+  display.showBootSplash(10000);
   display.setEnabled(displayOn);
   speakerOn = configStore.get().speakerDefaultOn;
   speaker.begin();
