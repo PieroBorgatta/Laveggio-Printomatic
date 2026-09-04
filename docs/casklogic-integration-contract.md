@@ -1,4 +1,4 @@
-# Contratto futuro con CaskLogic
+# Contratto CaskLogic PesaLink con Testa&Coda
 
 Questo documento descrive il lato gestionale da implementare in un intervento
 separato. Il repository CaskLogic non e stato modificato.
@@ -30,8 +30,8 @@ Campi di identita e ordinamento obbligatori:
 {
   "type": "scale.snapshot",
   "schema_version": 1,
-  "event_id": "laveggio-printomatic-01:A1B2C3-18FA93DE:1842",
-  "device_id": "laveggio-printomatic-01",
+  "event_id": "pesalink-01:A1B2C3-18FA93DE:1842",
+  "device_id": "pesalink-01",
   "boot_id": "A1B2C3-18FA93DE",
   "sequence": 1842,
   "captured_at": "2026-08-29T16:42:18+0200",
@@ -51,7 +51,7 @@ La firma copre, in quest'ordine e separati da `\n`, `event_id`, `captured_at`,
 `weight_kg` e le quattro cifre unite da un punto. Esempio canonico:
 
 ```text
-laveggio-printomatic-01:A1B2C3-18FA93DE:1842
+pesalink-01:A1B2C3-18FA93DE:1842
 2026-08-29T16:42:18+0200
 12340
 1.2.3.4
@@ -123,7 +123,7 @@ Una risposta `2xx` conferma soltanto ricezione e validazione dell'evento:
 ```json
 {
   "accepted": true,
-  "device_id": "laveggio-printomatic-01",
+  "device_id": "pesalink-01",
   "boot_id": "A1B2C3-18FA93DE",
   "sequence": 1842,
   "server_time": "2026-08-29T14:42:18Z"

@@ -1,4 +1,4 @@
-// Laveggio Printomatic diagnostic and calibration reader.
+// CaskLogic PesaLink diagnostic and calibration reader for the Laveggio Printomatic scale.
 // SPDX-License-Identifier: CC-BY-4.0
 
 #include <Arduino.h>
@@ -464,7 +464,7 @@ void drawChannel(uint8_t channel, bool force) {
 void drawDashboardFrame() {
   lcdFillRect(0, 0, LCD_WIDTH, LCD_HEIGHT, NAVY);
   lcdFillRect(0, 0, LCD_WIDTH, 24, BLUE);
-  lcdDrawText(2, 5, "LAVEGGIO TEST", 2, WHITE);
+  lcdDrawText(2, 5, "PESALINK TEST", 2, WHITE);
 
   for (uint8_t channel = 0; channel < 4; ++channel) {
     const int y = 78 + channel * 43;
@@ -518,7 +518,7 @@ void printDiagnostics() {
 void setup() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("Laveggio Printomatic diagnostic starting");
+  Serial.println("CaskLogic PesaLink diagnostic starting");
 
   lcdInit();
 

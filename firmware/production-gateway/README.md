@@ -1,4 +1,4 @@
-# Firmware operativo Laveggio Printomatic
+# Firmware operativo CaskLogic PesaLink
 
 Firmware completo per la Waveshare ESP32-S3-Touch-LCD-2.8. Legge quattro AS5600
 attraverso il PCA9546/TCA9546A, converte le posizioni in peso, registra gli
@@ -101,7 +101,7 @@ sezioni dell'interfaccia senza la scheda collegata.
 
 Se non trova credenziali Wi-Fi salvate, il dispositivo crea:
 
-- SSID `LP-PW_casklogic-192_168_4_1`;
+- SSID `PesaLink_casklogic-192_168_4_1`;
 - password `casklogic`;
 - indirizzo `http://192.168.4.1`.
 

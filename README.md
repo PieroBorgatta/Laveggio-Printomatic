@@ -2,10 +2,11 @@
   <img src="docs/assets/casklogic-logo.png" width="280" alt="CaskLogic">
 </p>
 
-<h1 align="center">Laveggio Printomatic</h1>
+<h1 align="center">CaskLogic PesaLink</h1>
 
 <p align="center">
   Digitalizzazione non invasiva della pesa meccanica Laveggio Printomatic del 1965.<br>
+  Collegamento operativo con la tracciabilita del gestionale CaskLogic Testa&amp;Coda.<br>
   Sistema non fiscale, destinato esclusivamente all'uso interno.
 </p>
 
@@ -28,12 +29,12 @@
 
 ---
 
-![Dashboard Laveggio Printomatic](docs/assets/laveggio-dashboard.png)
+![Dashboard CaskLogic PesaLink per la pesa Laveggio Printomatic](docs/assets/laveggio-dashboard.png)
 
 ## 🧭 Panoramica
 
-Laveggio Printomatic legge quattro manopole meccaniche attraverso sensori
-magnetici AS5600, ricostruisce il peso stabile e conserva lo storico su
+CaskLogic PesaLink legge le quattro manopole meccaniche della pesa Laveggio
+Printomatic attraverso sensori magnetici AS5600, ricostruisce il peso stabile e conserva lo storico su
 microSD. La Waveshare ESP32-S3-Touch-LCD-2.8 espone un display capacitivo
 240×320 e un portale web CaskLogic per
 calibrazione, diagnostica, manutenzione e integrazione con il gestionale.
@@ -66,7 +67,7 @@ documentazione hardware.
 | **Autodiagnosi** | Test di sensori, microSD, batteria, touch, speaker, IMU, RTC, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore |
 | **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente dal portale web |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
-| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `LP-PW_casklogic-192_168_4_1` |
+| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `PesaLink_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
 | **Aggiornamenti** | OTA firmato ECDSA-P256, doppia partizione, validazione al riavvio, rollback e registro degli esiti |
 
@@ -138,7 +139,7 @@ non viene usata come coda automatica di reinvio.
 
 ## 📊 Autodiagnosi
 
-![Autodiagnosi Laveggio Printomatic](docs/assets/laveggio-autodiagnosi.png)
+![Autodiagnosi CaskLogic PesaLink](docs/assets/laveggio-autodiagnosi.png)
 
 La corrente assorbita è indicata come non disponibile perché la scheda non
 integra un sensore amperometrico. Tensione batteria, temperatura della scheda,
@@ -291,5 +292,5 @@ Gli STL di terzi mantengono licenza e attribuzione originali, documentate in
 
 <p align="center">
   <strong>CaskLogic Solutions</strong><br>
-  Laveggio Printomatic · preservare la meccanica, rendere misurabile il dato
+  CaskLogic PesaLink · la pesa Laveggio Printomatic nella tracciabilita Testa&amp;Coda
 </p>

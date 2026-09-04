@@ -11,8 +11,8 @@ OUTPUT = PROJECT_DIR / "include" / "WebAssets.h"
 def raw_string(name: str, path: Path) -> str:
     content = path.read_text(encoding="utf-8")
     return (
-        f"inline constexpr char {name}[] PROGMEM = R\"LAVEGGIO_WEB("
-        f"{content})LAVEGGIO_WEB\";\n"
+        f"inline constexpr char {name}[] PROGMEM = R\"PESALINK_WEB("
+        f"{content})PESALINK_WEB\";\n"
     )
 
 

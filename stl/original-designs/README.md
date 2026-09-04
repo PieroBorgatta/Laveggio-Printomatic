@@ -1,6 +1,7 @@
-# Modelli originali Laveggio Printomatic
+# Modelli originali CaskLogic PesaLink
 
-Questa cartella è riservata ai modelli progettati da Piero Borgatta:
+Questa cartella è riservata ai modelli progettati da Piero Borgatta per la
+pesa Laveggio Printomatic:
 
 - case per Waveshare ESP32-C6-LCD-1.47;
 - supporti per i quattro sensori AS5600;

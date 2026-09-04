@@ -1,6 +1,6 @@
-# Architettura per l'uso operativo
+# Architettura operativa CaskLogic PesaLink
 
-Il gateway ESP32 descritto qui è implementato in
+Il sistema CaskLogic PesaLink descritto qui è implementato in
 `firmware/production-gateway`. Il backend e il kiosk CaskLogic restano separati
 e non sono modificati da questo progetto.
 
@@ -76,7 +76,7 @@ Il contratto è versionato e ogni evento contiene uno snapshot completo:
 {
   "type": "scale.snapshot",
   "schema_version": 1,
-  "device_id": "laveggio-printomatic-01",
+  "device_id": "pesalink-01",
   "boot_id": "uuid-generato-al-riavvio",
   "sequence": 1842,
   "captured_ms": 983442,

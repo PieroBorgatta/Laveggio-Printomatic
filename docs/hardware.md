@@ -21,7 +21,7 @@ sempre serigrafia, tensione, connettore e polarita del componente ricevuto.
 
 ## Destinazione d'uso
 
-Laveggio Printomatic realizza la digitalizzazione della pesa meccanica per uso
+CaskLogic PesaLink digitalizza la pesa meccanica Laveggio Printomatic per uso
 esclusivamente interno e non fiscale. Il peso acquisito ha finalita informative
 e operative: non sostituisce uno strumento omologato e non e valido per
 transazioni commerciali, adempimenti fiscali o verifiche metrologiche legali.

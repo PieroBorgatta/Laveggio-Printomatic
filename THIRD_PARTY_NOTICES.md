@@ -1,7 +1,7 @@
 # Componenti di terze parti
 
 Questo file elenca materiali inclusi nel repository ma non creati dagli autori
-di Laveggio Printomatic. La licenza generale `CC BY 4.0` del repository non
+di CaskLogic PesaLink. La licenza generale `CC BY 4.0` del repository non
 sostituisce le rispettive licenze originali.
 
 ## Case per Adafruit PCA9546, modello Printables 658753

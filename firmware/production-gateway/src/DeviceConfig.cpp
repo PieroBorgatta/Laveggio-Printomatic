@@ -19,10 +19,13 @@ String enabledKey(uint8_t channel, uint8_t position) {
 }  // namespace
 
 bool ConfigStore::begin(const String &deviceSuffix) {
+  // Namespace storico mantenuto per non perdere la configurazione dei dispositivi esistenti.
   if (!preferences_.begin("laveggio", false)) return false;
 
-  config_.deviceId = preferences_.getString("device_id", "laveggio-printomatic-" + deviceSuffix);
-  config_.hostname = preferences_.getString("hostname", "laveggio-" + deviceSuffix);
+  const String legacyDeviceId = "laveggio-printomatic-" + deviceSuffix;
+  const String legacyHostname = "laveggio-" + deviceSuffix;
+  config_.deviceId = preferences_.getString("device_id", "pesalink-" + deviceSuffix);
+  config_.hostname = preferences_.getString("hostname", "pesalink-" + deviceSuffix);
   config_.wifiSsid = preferences_.getString("wifi_ssid", "");
   config_.wifiPassword = preferences_.getString("wifi_pass", "");
   config_.useDhcp = preferences_.getBool("dhcp", true);
@@ -47,7 +50,7 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.mqttPort = preferences_.getUShort("mqtt_port", 8883);
   config_.mqttUsername = preferences_.getString("mqtt_user", "");
   config_.mqttPassword = preferences_.getString("mqtt_pass", "");
-  config_.mqttBaseTopic = preferences_.getString("mqtt_topic", "casklogic/laveggio");
+  config_.mqttBaseTopic = preferences_.getString("mqtt_topic", "casklogic/pesalink");
   config_.mqttCommandsEnabled = preferences_.getBool("mqtt_cmd", false);
   config_.ntpServer = preferences_.getString("ntp", "pool.ntp.org");
   config_.timezone = preferences_.getString("timezone", "CET-1CEST,M3.5.0,M10.5.0/3");
@@ -82,6 +85,20 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.batteryMinMv = preferences_.getUShort("bat_min_mv", 3200);
   config_.batteryMaxMv = preferences_.getUShort("bat_max_mv", 4200);
   config_.batteryCapacityMah = preferences_.getUShort("bat_cap_mah", 1200);
+
+  // Aggiorna solo i vecchi valori automatici; le personalizzazioni dell'operatore restano intatte.
+  if (config_.deviceId == legacyDeviceId) {
+    config_.deviceId = "pesalink-" + deviceSuffix;
+    preferences_.putString("device_id", config_.deviceId);
+  }
+  if (config_.hostname == legacyHostname) {
+    config_.hostname = "pesalink-" + deviceSuffix;
+    preferences_.putString("hostname", config_.hostname);
+  }
+  if (config_.mqttBaseTopic == "casklogic/laveggio") {
+    config_.mqttBaseTopic = "casklogic/pesalink";
+    preferences_.putString("mqtt_topic", config_.mqttBaseTopic);
+  }
 
   const uint32_t defaultMultipliers[laveggio::kChannelCount] = {10000, 1000, 100, 10};
   for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {

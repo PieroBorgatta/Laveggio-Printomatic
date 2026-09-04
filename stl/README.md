@@ -7,7 +7,7 @@ Questa cartella contiene le parti meccaniche stampabili del progetto.
 - [`third-party/`](third-party/): modelli provenienti da piattaforme o autori
   esterni. Ogni modello mantiene attribuzione, link e licenza originali.
 - [`original-designs/`](original-designs/): modelli progettati da Piero Borgatta
-  per il bilico Laveggio Printomatic.
+  per CaskLogic PesaLink e la pesa Laveggio Printomatic.
 
 Non assumere che tutti gli STL abbiano la stessa licenza. Controllare sempre il
 README e il file `LICENSE` presenti nella cartella specifica del modello.

@@ -5,7 +5,7 @@
 > materiali. I file restano inclusi esclusivamente come archivio del progetto.
 
 Case per il multiplexer Adafruit PCA9546/STEMMA QT, scaricato da Printables e
-stampato per il prototipo Laveggio Printomatic.
+stampato per il prototipo CaskLogic PesaLink della pesa Laveggio Printomatic.
 
 ## Attribuzione
 

@@ -4,7 +4,8 @@ Usare questo prompt in un'attivita separata aperta sul repository CaskLogic:
 
 ```text
 Nel repository C:\GESTIONALE-TESTA-E-CODA\CaskLogic-GestionaleSfuso implementa
-l'integrazione del dispositivo Laveggio Printomatic. Prima leggi, senza
+l'integrazione del sistema CaskLogic PesaLink collegato alla pesa Laveggio
+Printomatic. Prima leggi, senza
 modificarlo, il contratto nel repository
 C:\GESTIONALE-TESTA-E-CODA\Laveggio-Printomatic\docs\casklogic-integration-contract.md
 e verifica i pattern gia presenti nel backend, nel realtime e nel kiosk.

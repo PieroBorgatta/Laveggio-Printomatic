@@ -10,10 +10,13 @@ nel repository, nel dispositivo o nel pacchetto assistenza.
 Il build script cerca per impostazione predefinita:
 
 ```text
-%USERPROFILE%\.casklogic\laveggio-signing\private_key.pem
+%USERPROFILE%\.casklogic\pesalink-signing\private_key.pem
 ```
 
-La posizione puo essere sostituita con `LAVEGGIO_SIGNING_KEY`. La chiave va
+La posizione puo essere sostituita con `PESALINK_SIGNING_KEY`. Per continuita
+con le installazioni precedenti, il processo accetta anche il percorso storico
+`.casklogic\laveggio-signing\private_key.pem` e la variabile
+`LAVEGGIO_SIGNING_KEY`. La chiave va
 conservata in un archivio cifrato, con backup offline e accesso limitato agli
 operatori autorizzati. La perdita della chiave impedisce nuovi aggiornamenti
 OTA ai dispositivi che incorporano la relativa chiave pubblica; una sua

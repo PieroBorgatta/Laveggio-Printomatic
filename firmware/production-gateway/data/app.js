@@ -95,11 +95,11 @@ async function refreshStatus(){try{state.status=await api('/api/status');renderS
 function openView(name){$$('.view').forEach(view=>view.classList.toggle('active',view.id===`view-${name}`));$$('.nav-button').forEach(button=>button.classList.toggle('active',button.dataset.view===name));$('#page-title').textContent=titles[name];if(name==='calibration')loadCalibration().catch(error=>toast(error.message,true));if(name==='history')loadHistory().catch(error=>toast(error.message,true));if(name==='system')loadLog();if(name==='diagnostics')loadDiagnostics().catch(error=>toast(error.message,true))}
 
 async function init(){
-  const storedTheme=localStorage.getItem('laveggio-theme');
+  const storedTheme=localStorage.getItem('pesalink-theme')||localStorage.getItem('laveggio-theme');
   document.documentElement.classList.toggle('dark',storedTheme==='dark');
   $('#copyright-title').textContent=`© ${new Date().getFullYear()} CaskLogic Solutions`;
   $$('.nav-button').forEach(button=>button.addEventListener('click',()=>openView(button.dataset.view)));
-  $('#theme-toggle').addEventListener('click',()=>{document.documentElement.classList.toggle('dark');localStorage.setItem('laveggio-theme',document.documentElement.classList.contains('dark')?'dark':'light');renderDiagnosticCharts()});
+  $('#theme-toggle').addEventListener('click',()=>{document.documentElement.classList.toggle('dark');localStorage.setItem('pesalink-theme',document.documentElement.classList.contains('dark')?'dark':'light');renderDiagnosticCharts()});
   $('#display-toggle').addEventListener('change',async event=>{try{await api('/api/display',{method:'POST',body:formBody({enabled:event.target.checked?'true':'false'})});toast(event.target.checked?'Display acceso':'Display spento')}catch(error){event.target.checked=!event.target.checked;toast(error.message,true)}});
   $('#speaker-toggle').addEventListener('change',async event=>{try{await api('/api/speaker',{method:'POST',body:formBody({enabled:event.target.checked?'true':'false',test:event.target.checked?'true':'false'})});toast(event.target.checked?'Conferma sonora attiva':'Conferma sonora disattivata')}catch(error){event.target.checked=!event.target.checked;toast(error.message,true)}});
   $('#calibration-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget;try{await saveForm('/api/calibration/settings',{channel:state.channel,multiplier:form.multiplier.value,tolerance:form.tolerance.value,hysteresis:form.hysteresis.value},'Parametri salvati');await loadCalibration()}catch(error){toast(error.message,true)}});

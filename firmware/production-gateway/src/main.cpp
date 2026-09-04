@@ -1,4 +1,4 @@
-// Laveggio Printomatic production gateway.
+// CaskLogic PesaLink production gateway for the Laveggio Printomatic scale.
 // SPDX-License-Identifier: CC-BY-4.0
 
 #include <Arduino.h>
@@ -68,9 +68,9 @@ constexpr uint32_t kTimeSyncRetryIntervalMs = 15000;
 constexpr uint32_t kRetentionIntervalMs = 86400000UL;
 constexpr uint32_t kAuthBlockMs = 60000;
 constexpr uint8_t kAuthFailureLimit = 5;
-constexpr char kRescueSsid[] = "LP-PW_casklogic-192_168_4_1";
+constexpr char kRescueSsid[] = "PesaLink_casklogic-192_168_4_1";
 constexpr char kRescuePassword[] = "casklogic";
-constexpr char kAuthRealm[] = "Laveggio Printomatic v3";
+constexpr char kAuthRealm[] = "CaskLogic PesaLink v3";
 static_assert(sizeof(kRescueSsid) - 1 <= 32, "Rescue SSID exceeds the Wi-Fi limit");
 
 struct OutboundMessage {
@@ -531,7 +531,7 @@ bool runSdHealthCheck() {
   }
   ensureDirectoryTree("/diagnostics");
   const String testPath = "/diagnostics/.sd-health-" + bootId + ".tmp";
-  const String expected = "LAVEGGIO-SD-CHECK-" + String(esp_random(), HEX);
+  const String expected = "PESALINK-SD-CHECK-" + String(esp_random(), HEX);
   File output = SD.open(testPath, FILE_WRITE);
   if (!output || output.print(expected) != expected.length()) {
     if (output) output.close();
@@ -1395,7 +1395,7 @@ bool authorizedMetrics() {
     const String authorization = webServer.header("Authorization");
     if (authorization.startsWith("Bearer ") && constantTimeEqual(authorization.substring(7), token)) return true;
     sendSecurityHeaders();
-    webServer.sendHeader("WWW-Authenticate", "Bearer realm=\"Laveggio metrics\"");
+    webServer.sendHeader("WWW-Authenticate", "Bearer realm=\"CaskLogic PesaLink metrics\"");
     webServer.send(401, "text/plain; charset=utf-8", "Token metriche non valido\n");
     return false;
   }
@@ -1406,29 +1406,29 @@ String buildPrometheusMetrics() {
   const DeviceConfig &config = configStore.get();
   String metrics;
   metrics.reserve(2600);
-  metrics += "# HELP laveggio_up Device firmware is running.\n# TYPE laveggio_up gauge\nlaveggio_up 1\n";
-  metrics += "# TYPE laveggio_uptime_seconds counter\nlaveggio_uptime_seconds " + String(millis() / 1000) + "\n";
-  metrics += "# TYPE laveggio_free_heap_bytes gauge\nlaveggio_free_heap_bytes " + String(ESP.getFreeHeap()) + "\n";
-  metrics += "# TYPE laveggio_wifi_connected gauge\nlaveggio_wifi_connected " + String(WiFi.status() == WL_CONNECTED ? 1 : 0) + "\n";
-  metrics += "# TYPE laveggio_wifi_rssi_dbm gauge\nlaveggio_wifi_rssi_dbm " + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + "\n";
-  metrics += "# TYPE laveggio_time_synchronized gauge\nlaveggio_time_synchronized " + String(timeSynchronized ? 1 : 0) + "\n";
-  metrics += "# TYPE laveggio_sd_ready gauge\nlaveggio_sd_ready " + String(sdReady ? 1 : 0) + "\n";
-  metrics += "# TYPE laveggio_sd_health gauge\nlaveggio_sd_health " + String(sdHealth.lastCheckOk ? 1 : 0) + "\n";
-  metrics += "# TYPE laveggio_sd_free_bytes gauge\nlaveggio_sd_free_bytes " + String(sdReady ? SD.totalBytes() - SD.usedBytes() : 0) + "\n";
-  metrics += "# TYPE laveggio_battery_voltage_millivolts gauge\nlaveggio_battery_voltage_millivolts " + String(batteryVoltageMv) + "\n";
-  metrics += "# TYPE laveggio_chip_temperature_celsius gauge\nlaveggio_chip_temperature_celsius " + String(temperatureRead(), 1) + "\n";
-  metrics += "# TYPE laveggio_integration_last_ok gauge\nlaveggio_integration_last_ok " + String(integrationLastOk ? 1 : 0) + "\n";
-  metrics += "# TYPE laveggio_mqtt_connected gauge\nlaveggio_mqtt_connected " + String(mqttClient.connected() ? 1 : 0) + "\n";
-  metrics += "# TYPE laveggio_weight_kg gauge\nlaveggio_weight_kg " + String(currentSnapshot.weightKg) + "\n";
+  metrics += "# HELP pesalink_up Device firmware is running.\n# TYPE pesalink_up gauge\npesalink_up 1\n";
+  metrics += "# TYPE pesalink_uptime_seconds counter\npesalink_uptime_seconds " + String(millis() / 1000) + "\n";
+  metrics += "# TYPE pesalink_free_heap_bytes gauge\npesalink_free_heap_bytes " + String(ESP.getFreeHeap()) + "\n";
+  metrics += "# TYPE pesalink_wifi_connected gauge\npesalink_wifi_connected " + String(WiFi.status() == WL_CONNECTED ? 1 : 0) + "\n";
+  metrics += "# TYPE pesalink_wifi_rssi_dbm gauge\npesalink_wifi_rssi_dbm " + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0) + "\n";
+  metrics += "# TYPE pesalink_time_synchronized gauge\npesalink_time_synchronized " + String(timeSynchronized ? 1 : 0) + "\n";
+  metrics += "# TYPE pesalink_sd_ready gauge\npesalink_sd_ready " + String(sdReady ? 1 : 0) + "\n";
+  metrics += "# TYPE pesalink_sd_health gauge\npesalink_sd_health " + String(sdHealth.lastCheckOk ? 1 : 0) + "\n";
+  metrics += "# TYPE pesalink_sd_free_bytes gauge\npesalink_sd_free_bytes " + String(sdReady ? SD.totalBytes() - SD.usedBytes() : 0) + "\n";
+  metrics += "# TYPE pesalink_battery_voltage_millivolts gauge\npesalink_battery_voltage_millivolts " + String(batteryVoltageMv) + "\n";
+  metrics += "# TYPE pesalink_chip_temperature_celsius gauge\npesalink_chip_temperature_celsius " + String(temperatureRead(), 1) + "\n";
+  metrics += "# TYPE pesalink_integration_last_ok gauge\npesalink_integration_last_ok " + String(integrationLastOk ? 1 : 0) + "\n";
+  metrics += "# TYPE pesalink_mqtt_connected gauge\npesalink_mqtt_connected " + String(mqttClient.connected() ? 1 : 0) + "\n";
+  metrics += "# TYPE pesalink_weight_kg gauge\npesalink_weight_kg " + String(currentSnapshot.weightKg) + "\n";
   for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
     const String label = "{channel=\"" + String(channel) + "\"}";
-    metrics += "laveggio_sensor_healthy" + label + " " + String(sensorReadings[channel].healthy() ? 1 : 0) + "\n";
-    metrics += "laveggio_sensor_read_failures_total" + label + " " + String(sensorErrors[channel].readFailures) + "\n";
-    metrics += "laveggio_sensor_magnet_errors_total" + label + " " + String(
+    metrics += "pesalink_sensor_healthy" + label + " " + String(sensorReadings[channel].healthy() ? 1 : 0) + "\n";
+    metrics += "pesalink_sensor_read_failures_total" + label + " " + String(sensorErrors[channel].readFailures) + "\n";
+    metrics += "pesalink_sensor_magnet_errors_total" + label + " " + String(
       sensorErrors[channel].weakMagnetSamples + sensorErrors[channel].strongMagnetSamples
     ) + "\n";
   }
-  metrics += "# laveggio_device_id " + config.deviceId + "\n";
+  metrics += "# pesalink_device_id " + config.deviceId + "\n";
   return metrics;
 }
 
@@ -1973,7 +1973,7 @@ String createSupportZip() {
   StoredZipWriter zip(file);
   bool ok = zip.add(
     "README.txt",
-    "Pacchetto assistenza Laveggio Printomatic.\r\n"
+    "Pacchetto assistenza CaskLogic PesaLink per la pesa Laveggio Printomatic.\r\n"
     "Credenziali, token, chiavi, certificati, SSID e indirizzi IP sono esclusi.\r\n"
   );
   ok &= zip.add("configuration-anonymized.json", buildAnonymizedConfigJson());
@@ -2136,7 +2136,7 @@ void streamFilteredHistoryExport(const HistoryQuery &query) {
   }
   sendSecurityHeaders();
   webServer.sendHeader("Cache-Control", "no-store");
-  webServer.sendHeader("Content-Disposition", "attachment; filename=laveggio-pesate-filtrate.ndjson");
+  webServer.sendHeader("Content-Disposition", "attachment; filename=pesalink-pesate-filtrate.ndjson");
   webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
   webServer.send(200, "application/x-ndjson", "");
   for (const String &path : paths) {
@@ -2256,7 +2256,7 @@ void registerWebRoutes() {
     }
     sendSecurityHeaders();
     webServer.sendHeader("Cache-Control", "no-store");
-    webServer.sendHeader("Content-Disposition", "attachment; filename=laveggio-support-" + bootId + ".zip");
+    webServer.sendHeader("Content-Disposition", "attachment; filename=pesalink-support-" + bootId + ".zip");
     webServer.streamFile(file, "application/zip");
     file.close();
     SD.remove(path);
@@ -2298,7 +2298,7 @@ void registerWebRoutes() {
     streamNdjsonExport(
       "/logs",
       "system",
-      "laveggio-log-completo.ndjson",
+      "pesalink-log-completo.ndjson",
       "Log non disponibile"
     );
   });
@@ -2494,7 +2494,7 @@ void registerWebRoutes() {
     config.mqttPort = constrain(webServer.arg("mqtt_port").toInt(), 1, 65535);
     config.mqttUsername = mqttUsername;
     if (!mqttPassword.isEmpty()) config.mqttPassword = mqttPassword;
-    config.mqttBaseTopic = mqttBaseTopic.isEmpty() ? "casklogic/laveggio" : mqttBaseTopic;
+    config.mqttBaseTopic = mqttBaseTopic.isEmpty() ? "casklogic/pesalink" : mqttBaseTopic;
     config.mqttCommandsEnabled = parseBool(webServer.arg("mqtt_commands_enabled"));
     if (clientCertificate.isEmpty()) {
       config.tlsClientCertificate = "";
