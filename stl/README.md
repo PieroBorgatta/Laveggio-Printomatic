@@ -16,7 +16,8 @@ README e il file `LICENSE` presenti nella cartella specifica del modello.
 
 | Parte | Provenienza | Stato |
 | --- | --- | --- |
-| Case multiplexer Adafruit PCA9546 | OpenSensor.io / Printables | STL inclusi |
+| Case multiplexer Adafruit PCA9546 STEMMA QT cod. 5664 | OpenSensor.io / Printables | STL inclusi come archivio; non compatibile con il nuovo 5663 compatto |
+| Case multiplexer Adafruit PCA9546 compatto cod. 5663 | Progetto originale | Da progettare |
 | Case Waveshare ESP32-C6-LCD-1.47 | Progetto originale | In progettazione; link MakerWorld da aggiungere |
 | Supporti AS5600 | Progetto originale | In progettazione; link MakerWorld da aggiungere |
 | Supporti magneti | Progetto originale | In progettazione; link MakerWorld da aggiungere |

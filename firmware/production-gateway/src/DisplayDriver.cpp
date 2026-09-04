@@ -324,7 +324,7 @@ void DisplayDriver::drawPageFrame(const char *title) {
 void DisplayDriver::drawFrame() {
   drawPageFrame("PESATURA LIVE"); fillCard(10, 61, 220, 108, kSurfaceBlue);
   drawText(22, 72, "PESO RILEVATO", 1, kMuted, kSurfaceBlue); drawText(184, 143, "KG", 2, kMuted, kSurfaceBlue);
-  drawText(12, 179, "SENSORI", 1, kMuted, kWhite); lastWeightKg_ = UINT32_MAX; pageDirty_ = false;
+  drawText(36, 179, "USO INTERNO - NON FISCALE", 1, kMuted, kWhite); lastWeightKg_ = UINT32_MAX; pageDirty_ = false;
 }
 
 void DisplayDriver::drawStatusRow(uint16_t y, const char *label, const String &value, uint16_t color) {

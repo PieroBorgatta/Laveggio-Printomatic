@@ -6,7 +6,7 @@ async function withServer(callback){const {server}=createSimulator();await new P
 const csrfHeaders={'X-CSRF-Token':'simulator-csrf-token'};
 function post(url,body){return fetch(url,{method:'POST',headers:csrfHeaders,body})}
 
-test('serves the embedded dashboard and CaskLogic asset',()=>withServer(async base=>{const page=await fetch(base);assert.equal(page.status,200);assert.match(await page.text(),/Laveggio Printomatic/);const logo=await fetch(`${base}/casklogicmark.png`);assert.equal(logo.status,200);assert.equal(logo.headers.get('content-type'),'image/png')}));
+test('serves the embedded dashboard, internal-use notice and CaskLogic asset',()=>withServer(async base=>{const page=await fetch(base);assert.equal(page.status,200);const html=await page.text();assert.match(html,/Laveggio Printomatic/);assert.match(html,/uso interno non fiscale/i);const logo=await fetch(`${base}/casklogicmark.png`);assert.equal(logo.status,200);assert.equal(logo.headers.get('content-type'),'image/png')}));
 
 test('status contract exposes stable full snapshot and diagnostics',()=>withServer(async base=>{const response=await fetch(`${base}/api/status`);assert.equal(response.status,200);const status=await response.json();assert.deepEqual(status.snapshot.digits,[1,2,3,4]);assert.equal(status.snapshot.weight_kg,12340);assert.equal(status.sensors.length,4);assert.equal(status.storage.ready,true);assert.equal(status.network.connected,true)}));
 

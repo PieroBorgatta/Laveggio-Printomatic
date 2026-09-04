@@ -4,6 +4,10 @@ Firmware completo per la Waveshare ESP32-S3-Touch-LCD-2.8. Legge quattro AS5600
 attraverso il PCA9546/TCA9546A, converte le posizioni in peso, registra gli
 eventi sulla microSD e rende disponibile un pannello di amministrazione web.
 
+Il dispositivo digitalizza la pesa meccanica esclusivamente per uso interno e
+non fiscale. Le letture non sostituiscono uno strumento di pesatura omologato e
+non sono valide per transazioni commerciali o verifiche metrologiche legali.
+
 ## Funzioni implementate
 
 - scansione continua dei quattro sensori a 100 kHz;

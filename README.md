@@ -5,8 +5,8 @@
 <h1 align="center">Laveggio Printomatic</h1>
 
 <p align="center">
-  Gateway ESP32-S3 touch per la digitalizzazione non invasiva di un bilico meccanico
-  Laveggio Printomatic del 1965.
+  Digitalizzazione non invasiva della pesa meccanica Laveggio Printomatic del 1965.<br>
+  Sistema non fiscale, destinato esclusivamente all'uso interno.
 </p>
 
 <p align="center">
@@ -42,6 +42,12 @@ Il sistema non altera la meccanica originale e mantiene sempre disponibile la
 lettura locale. Il gestionale CaskLogic rimane un componente separato: questo
 repository contiene firmware, simulatore, contratto di integrazione e
 documentazione hardware.
+
+> [!WARNING]
+> **Digitalizzazione della pesa a uso interno, non fiscale.** Il peso acquisito
+> ha finalita informative e operative interne; non sostituisce uno strumento di
+> pesatura omologato ne una misura valida per transazioni commerciali, adempimenti
+> fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
 > Il firmware ESP32-S3 V2 e il profilo compatibile V1 compilano e il simulatore
@@ -143,7 +149,7 @@ RSSI e memoria libera sono invece registrabili senza aggiungere altre schede.
 ```mermaid
 flowchart LR
     A[4 manopole] --> B[4 sensori AS5600]
-    B --> C[PCA9546 / TCA9546A]
+    B --> C[PCA9546 Adafruit 5663]
     C --> D[ESP32-S3 Touch LCD 2.8]
     D --> E[ST7789 + CST3530/CST328]
     D --> F[MicroSD SDMMC]
@@ -153,6 +159,7 @@ flowchart LR
     I[LiPo 1S] --> D
     D --> K[PCM5101 + speaker]
     D --> L[QMI8658 + PCF85063]
+    M[Antenna Wi-Fi 2,4 GHz] -->|SMA + pigtail IPEX1| D
 ```
 
 ## 🔩 Hardware
@@ -160,9 +167,13 @@ flowchart LR
 | Componente | Quantità | Riferimento |
 | --- | ---: | --- |
 | Waveshare ESP32-S3-Touch-LCD-2.8, 16 MB flash / 8 MB PSRAM | 1 | [Documentazione ufficiale](https://docs.waveshare.com/ESP32-S3-Touch-LCD-2.8) |
-| Adafruit PCA9546 / TCA9546A STEMMA QT | 1 | [Amazon.it · B0BSG8KX8L](https://www.amazon.it/dp/B0BSG8KX8L) |
+| Adafruit PCA9546 compatto a 4 canali, cod. 5663 (compatibile TCA9546A) | 1 | [Amazon.it · B0BSF13WD7](https://www.amazon.it/dp/B0BSF13WD7) |
 | Kit moduli AS5600 a 12 bit con magneti | 1 kit | [Amazon.it · B0FH1Y3GLG](https://www.amazon.it/dp/B0FH1Y3GLG) |
 | Cavetti micro JST-SH 1,0 mm, 4 pin | 1 confezione | [Amazon.it · B0BNCHC5Q4](https://www.amazon.it/dp/B0BNCHC5Q4) |
+| Pigtail IPEX-1/U.FL verso SMA femmina, 15 cm | 1 confezione da 5 | [Amazon.it · B07YBYMBSV](https://www.amazon.it/dp/B07YBYMBSV) |
+| Antenna Wi-Fi 2,4 GHz 2 dBi, SMA maschio | 1 confezione da 2 | [Amazon.it · B0CR5JPMNX](https://www.amazon.it/dp/B0CR5JPMNX) |
+| Cavo dati Lapp LiYY 4 × 0,14 mm², nero | 1 spezzone da 10 m | [Amazon.it · B0C69CJYZT](https://www.amazon.it/dp/B0C69CJYZT) |
+| Grani M5 × 12 mm con punta, inox A2, DIN 914 / ISO 4027 | 1 confezione da 20 | [Amazon.it · B0BZD8WXDQ](https://www.amazon.it/dp/B0BZD8WXDQ) |
 | Speaker 8 Ω 2 W 2030 | 1 | Incluso con la scheda Waveshare |
 | Batteria LiPo 3,7 V | 1 | Connettore MX1.25 2 pin; polarità da verificare |
 | MicroSD FAT32 | 1 | La scheda dichiara supporto fino a 16 GB |
@@ -170,6 +181,12 @@ flowchart LR
 La nuova Waveshare integra gestione di carica, misura batteria, RTC, IMU,
 codec PCM5101, amplificatore e slot microSD. Collegamenti e verifiche sono
 descritti in [`docs/power-and-ups.md`](docs/power-and-ups.md).
+
+Il PCA9546 cod. 5663 sostituisce il precedente modello STEMMA QT cod. 5664:
+richiede intestazioni o fili saldati e non e compatibile con il relativo case
+STL. Il pigtail e l'antenna esterna richiedono inoltre lo spostamento della
+resistenza di selezione RF previsto da Waveshare; l'antenna IPEX1 non e attiva
+semplicemente collegando il cavetto.
 
 ## 🚀 Avvio rapido
 

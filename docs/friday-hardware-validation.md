@@ -10,6 +10,8 @@ richiedono la Waveshare fisica.
 2. Controllare polarita della LiPo MX1.25 e continuita di tutti i cavi I2C.
 3. Inserire a dispositivo spento una microSD FAT32 non superiore a 16 GB.
 4. Collegare inizialmente solo USB-C, senza batteria, multiplexer o sensori.
+5. Se si usa l'antenna esterna, verificare che pigtail e antenna siano SMA
+   standard e non RP-SMA; modificare la resistenza RF solo a scheda spenta.
 
 ## Prima installazione USB
 
@@ -49,9 +51,12 @@ confermare boot senza reset ciclici, modello corretto e partizioni riconosciute.
 
 ## Sensori e collaudo finale
 
-Collegare il multiplexer su GPIO11/GPIO10, verificare `0x70`, quindi aggiungere
-un AS5600 alla volta e verificare `0x36` sul relativo canale. Solo dopo il test
-dei quattro rami eseguire i 40 punti di calibrazione, dieci giri controllati,
-prove di isteresi e confronto con l'indicazione meccanica. L'esito e pronto per
-l'uso operativo soltanto se display, audio, alimentazione, storico e peso reale
-passano insieme.
+Saldare e controllare il PCA9546 Adafruit 5663, collegarlo su GPIO11/GPIO10 e
+verificare `0x70`; quindi aggiungere un AS5600 alla volta e verificare `0x36` sul
+relativo canale. Provare i singoli spezzoni del cavo LiYY alla lunghezza reale,
+senza assumere che l'intera matassa da 10 m sia una tratta I2C utilizzabile. Solo
+dopo il test dei quattro rami eseguire i 40 punti di calibrazione, dieci giri
+controllati, prove di isteresi e confronto con l'indicazione meccanica. L'esito
+e pronto per l'uso operativo interno soltanto se display, audio, alimentazione,
+storico e peso reale passano insieme; il sistema resta non fiscale e non
+sostituisce una pesa omologata.
