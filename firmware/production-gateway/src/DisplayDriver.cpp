@@ -24,24 +24,24 @@ constexpr uint8_t kCst3530Address = 0x58;
 constexpr uint16_t kWidth = 240;
 constexpr uint16_t kHeight = 320;
 
-// RGB565 palette derived from casklogic.com.
+// RGB565 palette copied from the device's own web interface.
 constexpr uint16_t kNavy = 0x08A4;         // #0e1520
-constexpr uint16_t kBlue = 0xC449;         // #c18a4a
-constexpr uint16_t kLightBlue = 0xF7BF;    // #f3f7fb
+constexpr uint16_t kBlue = 0x21CD;         // #243b6b
+constexpr uint16_t kLightBlue = 0x32EF;    // #2f5e7a
 constexpr uint16_t kTeal = 0x7D15;         // #7fa3ae
 constexpr uint16_t kWhite = 0xFFFF;
-constexpr uint16_t kText = 0xF7BF;         // #f3f7fb
-constexpr uint16_t kSurface = 0x1106;      // #132033
-constexpr uint16_t kSurfaceBlue = 0x1927;  // #182538
-constexpr uint16_t kBorder = 0x4350;       // #466a86
-constexpr uint16_t kMuted = 0x9557;        // #94a8bb
-constexpr uint16_t kGreen = 0x7D15;        // #7fa3ae
-constexpr uint16_t kGreenLight = 0xAE3A;   // #aac7d0
-constexpr uint16_t kGreenSurface = 0x11C5;
-constexpr uint16_t kAmber = 0xD50E;        // #d4a073
-constexpr uint16_t kAmberSurface = 0x3963;
+constexpr uint16_t kText = 0x1926;         // #1a2430
+constexpr uint16_t kSurface = 0xF7BF;      // #f5f7fa
+constexpr uint16_t kSurfaceBlue = 0xFFFF;  // #ffffff
+constexpr uint16_t kBorder = 0xDF1D;       // #d9e2ea
+constexpr uint16_t kMuted = 0x5B2E;        // #586776
+constexpr uint16_t kGreen = 0x2C4A;        // #2e8b57
+constexpr uint16_t kGreenLight = 0x7D15;   // #7fa3ae
+constexpr uint16_t kGreenSurface = 0xEFBD; // #eaf4ee
+constexpr uint16_t kAmber = 0xD443;        // #d18a1d
+constexpr uint16_t kAmberSurface = 0xFFBC; // #fff5e6
 constexpr uint16_t kRed = 0xCA69;
-constexpr uint16_t kRedSurface = 0x3904;
+constexpr uint16_t kRedSurface = 0xFF7D;   // #fceced
 
 const uint8_t *glyphFor(char value) {
   static const uint8_t blank[5] = {0, 0, 0, 0, 0};
@@ -145,7 +145,7 @@ void DisplayDriver::drawLogo(uint16_t x, uint16_t y) {
     const uint8_t bit = 1U << (7 - index % 8);
     const bool navy = (pgm_read_byte(DISPLAY_LOGO_NAVY + index / 8) & bit) != 0;
     const bool teal = (pgm_read_byte(DISPLAY_LOGO_TEAL + index / 8) & bit) != 0;
-    const uint16_t pixel = teal ? kGreenLight : (navy ? kText : kSurface);
+    const uint16_t pixel = teal ? kTeal : (navy ? kBlue : kSurface);
     SPI.transfer(pixel >> 8); SPI.transfer(pixel);
   }
   digitalWrite(kLcdCs, HIGH);
@@ -310,19 +310,19 @@ void DisplayDriver::drawPill(uint16_t x, uint16_t y, const char *text, uint16_t 
 }
 
 void DisplayDriver::drawFooter() {
-  fillRect(0, 292, kWidth, 28, kNavy);
+  fillRect(0, 292, kWidth, 28, kBlue);
   for (uint8_t index = 0; index < kPageCount; ++index) {
     const uint16_t x = index * 48;
-    if (index == page_) fillCard(x + 13, 301, 22, 8, kTeal);
-    else fillCard(x + 20, 303, 8, 4, kMuted);
+    if (index == page_) fillCard(x + 13, 301, 22, 8, kWhite);
+    else fillCard(x + 20, 303, 8, 4, kTeal);
   }
 }
 
 void DisplayDriver::drawPageFrame(const char *title) {
-  fillRect(0, 0, kWidth, kHeight, kSurface); fillRect(0, 0, kWidth, 50, kNavy); fillRect(0, 46, kWidth, 4, kBlue);
-  drawText(12, 10, "CASKLOGIC", 2, kWhite, kNavy); drawText(12, 30, title, 1, kLightBlue, kNavy);
+  fillRect(0, 0, kWidth, kHeight, kSurface); fillRect(0, 0, kWidth, 50, kBlue); fillRect(0, 46, kWidth, 4, kLightBlue);
+  drawText(12, 10, "CASKLOGIC", 2, kWhite, kBlue); drawText(12, 30, title, 1, kWhite, kBlue);
   char pageLabel[8]; snprintf(pageLabel, sizeof(pageLabel), "%u/%u", page_ + 1, kPageCount);
-  drawText(198, 18, pageLabel, 1, kWhite, kNavy); drawFooter();
+  drawText(198, 18, pageLabel, 1, kWhite, kBlue); drawFooter();
 }
 
 void DisplayDriver::showBootSplash(uint32_t durationMs) {
@@ -331,11 +331,11 @@ void DisplayDriver::showBootSplash(uint32_t durationMs) {
   fillRect(0, 0, kWidth, kHeight, kSurface);
   const uint16_t logoX = (kWidth - DISPLAY_LOGO_WIDTH) / 2;
   drawLogo(logoX, 70);
-  drawText(66, 166, "CASKLOGIC", 2, kText, kSurface);
-  drawText(96, 190, "PESALINK", 1, kGreenLight, kSurface);
+  drawText(66, 166, "CASKLOGIC", 2, kBlue, kSurface);
+  drawText(96, 190, "PESALINK", 1, kLightBlue, kSurface);
   drawText(78, 238, "AVVIO IN CORSO", 1, kMuted, kSurface);
   fillCard(26, 260, 188, 14, kBorder);
-  fillCard(28, 262, 184, 10, kNavy);
+  fillCard(28, 262, 184, 10, kWhite);
 
   const uint32_t startedAt = millis();
   uint16_t lastWidth = 0;
@@ -343,12 +343,12 @@ void DisplayDriver::showBootSplash(uint32_t durationMs) {
     const uint32_t elapsed = millis() - startedAt;
     const uint16_t width = std::min<uint16_t>(184, static_cast<uint16_t>((elapsed * 184ULL) / durationMs));
     if (width > lastWidth) {
-      fillRect(28 + lastWidth, 262, width - lastWidth, 10, kBlue);
+      fillRect(28 + lastWidth, 262, width - lastWidth, 10, kLightBlue);
       lastWidth = width;
     }
     delay(20);
   }
-  if (lastWidth < 184) fillRect(28 + lastWidth, 262, 184 - lastWidth, 10, kBlue);
+  if (lastWidth < 184) fillRect(28 + lastWidth, 262, 184 - lastWidth, 10, kLightBlue);
   lastRenderMs_ = 0;
   lastWeightKg_ = UINT32_MAX;
   pageDirty_ = true;
@@ -384,24 +384,24 @@ void DisplayDriver::previousPage() {
   lastRenderMs_ = 0; lastWeightKg_ = UINT32_MAX; pageDirty_ = true;
 }
 
-void DisplayDriver::drawWrappedText(int x, int y, const String &text, uint8_t maxRows, uint16_t color) {
+void DisplayDriver::drawWrappedText(int x, int y, const String &text, uint8_t maxRows, uint16_t color, uint16_t background) {
   String normalized = text; normalized.toUpperCase(); constexpr size_t kCharactersPerRow = 35;
   for (uint8_t row = 0; row < maxRows; ++row) {
     const size_t start = row * kCharactersPerRow; if (start >= normalized.length()) break;
     const String line = normalized.substring(start, start + kCharactersPerRow);
-    drawText(x, y + row * 12, line.c_str(), 1, color, kNavy);
+    drawText(x, y + row * 12, line.c_str(), 1, color, background);
   }
 }
 
 void DisplayDriver::showNetworkInfo(const String &ssid, const String &wifiPassword, const String &ipAddress, const String &adminUser, const String &adminPassword) {
   if (!enabled_) return;
   networkInfoUntilMs_ = millis() + 30000; drawPageFrame("PRIMO ACCESSO");
-  fillCard(10, 62, 220, 58, kSurfaceBlue); drawText(20, 72, "RETE WIFI", 1, kMuted, kSurfaceBlue); drawWrappedText(20, 91, ssid, 2, kText);
+  fillCard(10, 62, 220, 58, kSurfaceBlue); drawText(20, 72, "RETE WIFI", 1, kMuted, kSurfaceBlue); drawWrappedText(20, 91, ssid, 2, kText, kSurfaceBlue);
   fillCard(10, 128, 220, 54, kGreenSurface); drawText(20, 138, "APRI NEL BROWSER", 1, kGreen, kGreenSurface);
-  drawWrappedText(20, 157, String("HTTP://") + ipAddress, 1, kText);
-  fillCard(10, 190, 220, 88, kSurface); drawText(20, 201, "UTENTE", 1, kMuted, kSurface); drawWrappedText(82, 201, adminUser, 1, kText);
-  drawText(20, 223, "PASSWORD", 1, kMuted, kSurface); drawWrappedText(82, 223, adminPassword, 1, kText);
-  if (!wifiPassword.isEmpty()) { drawText(20, 249, "PASSWORD WIFI", 1, kMuted, kSurface); drawWrappedText(116, 249, wifiPassword, 1, kText); }
+  drawWrappedText(20, 157, String("HTTP://") + ipAddress, 1, kText, kGreenSurface);
+  fillCard(10, 190, 220, 88, kSurfaceBlue); drawText(20, 201, "UTENTE", 1, kMuted, kSurfaceBlue); drawWrappedText(82, 201, adminUser, 1, kText, kSurfaceBlue);
+  drawText(20, 223, "PASSWORD", 1, kMuted, kSurfaceBlue); drawWrappedText(82, 223, adminPassword, 1, kText, kSurfaceBlue);
+  if (!wifiPassword.isEmpty()) { drawText(20, 249, "PASSWORD WIFI", 1, kMuted, kSurfaceBlue); drawWrappedText(116, 249, wifiPassword, 1, kText, kSurfaceBlue); }
 }
 
 void DisplayDriver::showFactoryReset() {

@@ -13,7 +13,16 @@ constexpr float kTwoPi = 6.28318530718f;
 }  // namespace
 
 bool SpeakerDriver::begin() {
+  if (!initializeChannel()) return false;
+  stopOutput();
+  ready_ = xTaskCreate(taskEntry, "speaker", 3072, this, 1, &task_) == pdPASS;
+  return ready_;
+}
+
+bool SpeakerDriver::initializeChannel() {
+  if (txChannel_ != nullptr) return true;
   i2s_chan_config_t channelConfig = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
+  channelConfig.auto_clear = true;
   if (i2s_new_channel(&channelConfig, &txChannel_, nullptr) != ESP_OK) return false;
 
   i2s_std_config_t standardConfig = {
@@ -41,8 +50,7 @@ bool SpeakerDriver::begin() {
     txChannel_ = nullptr;
     return false;
   }
-  ready_ = xTaskCreate(taskEntry, "speaker", 3072, this, 1, &task_) == pdPASS;
-  return ready_;
+  return true;
 }
 
 void SpeakerDriver::confirmWeight() {
@@ -79,7 +87,7 @@ void SpeakerDriver::playTestTone() {
 }
 
 void SpeakerDriver::playTone(uint16_t frequency, uint16_t durationMs, uint8_t amplitude) {
-  if (txChannel_ == nullptr) return;
+  if (!initializeChannel()) return;
   constexpr size_t kFrames = 128;
   int16_t samples[kFrames * 2];
   const uint32_t totalFrames = kSampleRate * durationMs / 1000;
@@ -109,9 +117,13 @@ void SpeakerDriver::playTone(uint16_t frequency, uint16_t durationMs, uint8_t am
 
 void SpeakerDriver::stopOutput() {
   if (txChannel_ == nullptr) return;
-  // Arresta anche il DMA: alcuni DAC PCM5101 mantengono l'ultimo campione
-  // quando il flusso I2S resta attivo dopo un suono molto breve.
   i2s_channel_disable(txChannel_);
-  vTaskDelay(pdMS_TO_TICKS(2));
-  i2s_channel_enable(txChannel_);
+  i2s_del_channel(txChannel_);
+  txChannel_ = nullptr;
+  pinMode(kI2sData, OUTPUT);
+  pinMode(kI2sBclk, OUTPUT);
+  pinMode(kI2sWordSelect, OUTPUT);
+  digitalWrite(kI2sData, LOW);
+  digitalWrite(kI2sBclk, LOW);
+  digitalWrite(kI2sWordSelect, LOW);
 }

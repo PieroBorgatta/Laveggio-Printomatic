@@ -14,6 +14,7 @@ class SpeakerDriver {
 
  private:
   static void taskEntry(void *argument);
+  bool initializeChannel();
   void taskLoop();
   void playConfirmation();
   void playTestTone();
