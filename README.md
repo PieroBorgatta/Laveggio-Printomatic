@@ -45,8 +45,8 @@ documentazione hardware.
 
 > [!WARNING]
 > **Digitalizzazione della pesa a uso interno, non fiscale.** Il peso acquisito
-> ha finalita informative e operative interne; non sostituisce uno strumento di
-> pesatura omologato ne una misura valida per transazioni commerciali, adempimenti
+> ha finalità informative e operative interne; non sostituisce uno strumento di
+> pesatura omologato né una misura valida per transazioni commerciali, adempimenti
 > fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
@@ -167,7 +167,7 @@ flowchart LR
     D -->|HTTPS / mTLS| H[Gestionale]
     D -->|MQTT TLS opzionale| H
     I[LiPo 1S] --> D
-    D --> K[PCM5101 + speaker]
+    D --> K[PCM5101 + 2 speaker]
     D --> L[QMI8658 + PCF85063]
     M[Antenna Wi-Fi 2,4 GHz] -->|SMA + pigtail IPEX1| D
 ```
@@ -183,20 +183,22 @@ flowchart LR
 | Pigtail IPEX-1/U.FL verso SMA femmina, 15 cm | 1 confezione da 5 | [Amazon.it · B07YBYMBSV](https://www.amazon.it/dp/B07YBYMBSV) |
 | Antenna Wi-Fi 2,4 GHz 2 dBi, SMA maschio | 1 confezione da 2 | [Amazon.it · B0CR5JPMNX](https://www.amazon.it/dp/B0CR5JPMNX) |
 | Cavo dati Lapp LiYY 4 × 0,14 mm², nero | 1 spezzone da 10 m | [Amazon.it · B0C69CJYZT](https://www.amazon.it/dp/B0C69CJYZT) |
-| Grani M5 × 12 mm con punta, inox A2, DIN 914 / ISO 4027 | 1 confezione da 20 | [Amazon.it · B0BZD8WXDQ](https://www.amazon.it/dp/B0BZD8WXDQ) |
-| Speaker 8 Ω 2 W 2030 | 1 | Incluso con la scheda Waveshare |
-| Batteria LiPo 3,7 V | 1 | Connettore MX1.25 2 pin; polarità da verificare |
-| MicroSD FAT32 | 1 | La scheda dichiara supporto fino a 16 GB |
+| Kit viti a macchina svasate nere M2 / M2,5 / M3, acciaio al carbonio | 1 kit da 500 | [Amazon.it · B0D1N4D5ZR](https://www.amazon.it/dp/B0D1N4D5ZR) |
+| Speaker 8 Ω 2 W 2030 | 2 | Inclusi con la scheda Waveshare |
+| Batteria LiPo 803040, 3,7 V, 1000 mAh, protetta | 1 | [Amazon.it · B0G5NM9YJ4](https://www.amazon.it/dp/B0G5NM9YJ4); connettore JST 1,25 mm, polarità da verificare |
+| SanDisk Extreme microSDXC 128 GB, A2 / U3 / V30 | 1 | [Amazon.it · B07FCMKK5X](https://www.amazon.it/dp/B07FCMKK5X); montata e verificata in lettura/scrittura |
 
 La nuova Waveshare integra gestione di carica, misura batteria, RTC, IMU,
 codec PCM5101, amplificatore e slot microSD. Collegamenti e verifiche sono
 descritti in [`docs/power-and-ups.md`](docs/power-and-ups.md).
 
 Il PCA9546 cod. 5663 sostituisce il precedente modello STEMMA QT cod. 5664:
-richiede intestazioni o fili saldati e non e compatibile con il relativo case
-STL. Il pigtail e l'antenna esterna richiedono inoltre lo spostamento della
-resistenza di selezione RF previsto da Waveshare; l'antenna IPEX1 non e attiva
-semplicemente collegando il cavetto.
+richiede intestazioni o fili saldati e non è compatibile con il relativo case
+STL. Per attivare il connettore IPEX1 dell'antenna esterna è stato necessario
+spostare a sinistra la resistenza di selezione RF. La modifica è stata eseguita
+a scheda disalimentata, con saldatore ad aria calda e flussante: il solo
+collegamento del pigtail non attiva l'antenna esterna. La foto e la procedura
+sono riportate in [`docs/wiring.md`](docs/wiring.md#antenna-wi-fi-esterna).
 
 ## 🚀 Avvio rapido
 
@@ -284,9 +286,10 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 - [x] Gateway, portale web e simulatore implementati
 - [x] Test host `30/30`, browser Chromium e build firmate ESP32-S3 V2/V1 completati
 - [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
-- [ ] Collaudo completo del display, touch, speaker, RTC in blackout, IMU sulla bascula e batteria
+- [ ] Collaudo completo del display, touch, due speaker, RTC in blackout, IMU sulla bascula e batteria
 - [ ] Calibrazione meccanica completa delle quattro manopole
-- [ ] Collaudo reale di microSD FAT32, batteria, commutazione e rollback forzato
+- [x] MicroSD SanDisk Extreme 128 GB montata e verificata in lettura/scrittura
+- [ ] Collaudo reale di batteria, commutazione e rollback forzato
 - [ ] Implementazione del contratto nel gestionale CaskLogic
 
 ## Licenza e attribuzioni

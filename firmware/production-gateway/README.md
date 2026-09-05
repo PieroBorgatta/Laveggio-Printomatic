@@ -12,7 +12,7 @@ non sono valide per transazioni commerciali o verifiche metrologiche legali.
 
 - scansione continua dei quattro sensori a 100 kHz;
 - calibrazione persistente delle dieci posizioni di ogni manopola;
-- distanza angolare circolare, tolleranza, isteresi e finestra di stabilita;
+- distanza angolare circolare, tolleranza, isteresi e finestra di stabilità;
 - display ST7789 240×320 controllabile dal web, con cinque pagine a card, swipe orizzontale, scroll verticale, footer touch e fallback BOOT;
 - touch con autodetect CST3530 per V2 e CST328 per V1;
 - doppio tono su speaker PCM5101 alla conferma della pesata, disabilitabile e persistente dal portale;
@@ -47,8 +47,8 @@ non sono valide per transazioni commerciali o verifiche metrologiche legali.
 ## Compilazione
 
 Il progetto usa Arduino ESP32 3.x tramite la piattaforma pioarduino. Il profilo
-predefinito e la revisione Waveshare V2 con touch CST3530; il secondo profilo
-mantiene la compatibilita con la V1 dotata di CST328. Su Windows conviene usare
+predefinito è la revisione Waveshare V2 con touch CST3530; il secondo profilo
+mantiene la compatibilità con la V1 dotata di CST328. Su Windows conviene usare
 una cache PlatformIO corta per evitare il limite storico dei percorsi:
 
 ```powershell
@@ -72,16 +72,16 @@ Misure della build `2.1.0` verificata il 5 settembre 2026 sui profili Waveshare 
 - RAM statica: `59.004 / 327.680 byte` (`18,0%`);
 - flash applicazione: `1.713.714 / 6.291.456 byte` (`27,2%`).
 
-Le due partizioni OTA occupano `0x600000` byte, cioe 6 MiB ciascuna, sulla flash
-da 16 MB. La partizione SPIFFS e stata rimossa perche gli asset web sono
+Le due partizioni OTA occupano `0x600000` byte, cioè 6 MiB ciascuna, sulla flash
+da 16 MB. La partizione SPIFFS è stata rimossa perché gli asset web sono
 incorporati nel firmware e i dati operativi risiedono sulla microSD.
 
-La RAM allocata dinamicamente per coda HTTPS, task e richieste web non e
+La RAM allocata dinamicamente per coda HTTPS, task e richieste web non è
 compresa nel primo valore; prima dell'installazione operativa va quindi
 controllato anche l'heap libero esposto nella pagina Sistema.
 
-Il file `include/WebAssets.h` e generato automaticamente da `data/` prima della
-compilazione. Deve essere versionato affinche il contenuto web incorporato resti
+Il file `include/WebAssets.h` è generato automaticamente da `data/` prima della
+compilazione. Deve essere versionato affinché il contenuto web incorporato resti
 ispezionabile e riproducibile.
 
 La procedura di gestione delle chiavi e descritta in
@@ -107,11 +107,11 @@ Se non trova credenziali Wi-Fi salvate, il dispositivo crea:
 - password `casklogic`;
 - indirizzo `http://192.168.4.1`.
 
-Lo stesso access point viene attivato se la rete configurata non e raggiungibile.
+Lo stesso access point viene attivato se la rete configurata non è raggiungibile.
 Il dispositivo continua a tentare la riconnessione e spegne automaticamente
 l'access point dopo 120 secondi consecutivi di connessione stabile alla rete
-principale. Durante il primo provisioning l'interfaccia e raggiungibile dalla
-rete creata dal dispositivo e richiede gia l'utente `admin` e la password
+principale. Durante il primo provisioning l'interfaccia è raggiungibile dalla
+rete creata dal dispositivo e richiede già l'utente `admin` e la password
 iniziale `casklogic`. Le stesse credenziali proteggono il portale
 dopo il salvataggio del Wi-Fi. La password non viene stampata sulla seriale e
 va cambiata dalla sezione Sistema prima dell'uso operativo.
@@ -131,9 +131,9 @@ La scheda deve essere FAT32. Il firmware crea:
 Lo storico viene scritto soltanto quando tutte le cifre sono valide, la misura
 rimane stabile per la finestra configurata e il peso stabile cambia. I file
 vengono ruotati con nomi univoci e gli archivi non vengono sovrascritti. La
-pagina Storico legge soltanto le 20 righe piu recenti all'apertura e applica
+pagina Storico legge soltanto le 20 righe più recenti all'apertura e applica
 filtri e ordinamento lato dispositivo; l'export usa gli stessi filtri attivi.
-L'esito di pubblicazione piu recente e visibile nello stato integrazione, mentre
+L'esito di pubblicazione più recente è visibile nello stato integrazione, mentre
 il record locale rimane immutabile e non costituisce conferma di ricezione.
 La pagina Sistema offre separatamente l'export completo dei log, inclusi i
 campioni periodici di presenza, angolo, stato magnete, AGC e magnitudine.
@@ -147,9 +147,9 @@ Le build ESP32-S3 V2 e V1, la firma OTA, i test host e il portale in Chromium
 sono stati verificati senza la nuova scheda. Non sono ancora prova fisica di
 display, touch, speaker, batteria, RTC, IMU, SD_MMC o bus I2C esterno. La prima
 installazione richiede il file factory tramite USB: un OTA della precedente
-ESP32-C6 non puo trasformare o migrare l'hardware.
+ESP32-C6 non può trasformare o migrare l'hardware.
 
-La sequenza completa per il collaudo e in
+La sequenza completa per il collaudo è in
 [`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).
 
 ## Versione 2.1.0

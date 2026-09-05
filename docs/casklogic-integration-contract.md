@@ -1,7 +1,7 @@
 # Contratto CaskLogic PesaLink con Testa&Coda
 
 Questo documento descrive il lato gestionale da implementare in un intervento
-separato. Il repository CaskLogic non e stato modificato.
+separato. Il repository CaskLogic non è stato modificato.
 
 ## Endpoint dispositivo
 
@@ -21,10 +21,10 @@ stesso `device_id` autorizzato dal token applicativo.
 Eventi inviati:
 
 - `scale.snapshot`: misura valida e stabile cambiata;
-- `scale.heartbeat`: ultima misura completa durante inattivita;
+- `scale.heartbeat`: ultima misura completa durante inattività;
 - `device.power`: perdita o ripristino dell'alimentazione esterna.
 
-Campi di identita e ordinamento obbligatori:
+Campi di identità e ordinamento obbligatori:
 
 ```json
 {
@@ -83,9 +83,9 @@ riconnessione; lo storico locale rimane disponibile per audit ed export.
 ## Configurazione remota
 
 Il dispositivo esegue un `GET` HTTPS all'URL configurato e invia
-`Authorization: Bearer`, `X-Device-Id` e `X-Config-Version`. Il backend puo
+`Authorization: Bearer`, `X-Device-Id` e `X-Config-Version`. Il backend può
 rispondere `304` oppure `200` con una versione strettamente crescente. Sono
-accettati soltanto: finestra di stabilita, display predefinito, heartbeat e
+accettati soltanto: finestra di stabilità, display predefinito, heartbeat e
 watchdog, retention dello storico e calibrazioni. Rete Wi-Fi, amministratore,
 endpoint, token e materiale TLS restano esclusivamente locali. Una risposta
 valida viene salvata in NVS; errori o payload non validi lasciano attiva
@@ -130,18 +130,18 @@ Una risposta `2xx` conferma soltanto ricezione e validazione dell'evento:
 }
 ```
 
-Il dispositivo mantiene lo storico locale anche quando il backend non e
+Il dispositivo mantiene lo storico locale anche quando il backend non è
 raggiungibile, ma non usa lo storico come coda di reinvio. Le rotazioni usano
 file univoci, senza sovrascrivere gli
 archivi precedenti, e l'interfaccia permette un export NDJSON concatenato. La
-microSD non e la fonte canonica delle pesate confermate nel gestionale e il
+microSD non è la fonte canonica delle pesate confermate nel gestionale e il
 campo locale `delivery` registra l'intenzione di invio, non una ricevuta del
 backend.
 
 Il watchdog heartbeat del dispositivo considera raggiungibile il gestionale
 soltanto dopo una risposta `2xx`. Dopo la soglia configurata esegue al massimo
 un riavvio e resta inibito fino a una nuova risposta valida, evitando reboot
-loop durante indisponibilita prolungate del backend.
+loop durante indisponibilità prolungate del backend.
 
 ## Estensioni compatibili 2.1.0
 

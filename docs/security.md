@@ -4,7 +4,7 @@
 
 Il portale amministrativo ascolta in HTTP sulla sola rete locale. Non deve
 essere pubblicato su Internet, esposto tramite port forwarding o inserito in
-una rete ospiti non controllata. La configurazione raccomandata e un SSID
+una rete ospiti non controllata. La configurazione raccomandata è un SSID
 dedicato associato dall'access point a una VLAN tecnica, con regole firewall
 che consentano:
 
@@ -13,7 +13,7 @@ che consentano:
 - nessuna connessione iniziata dalle altre VLAN verso l'ESP32, salvo quelle
   amministrative esplicitamente autorizzate.
 
-La VLAN non e un parametro che una stazione Wi-Fi ESP32 possa imporre: il tag
+La VLAN non è un parametro che una stazione Wi-Fi ESP32 possa imporre: il tag
 802.1Q e l'associazione SSID/VLAN appartengono all'access point e allo switch.
 
 ## Protezioni del portale
@@ -33,7 +33,7 @@ essere sostituite dalla pagina Sistema prima dell'uso operativo.
 Basic invia le credenziali codificate Base64 ma non cifrate: il portale deve
 restare su AP/VLAN tecnica e non essere esposto su reti non fidate. Un portale HTTPS locale richiede la sostituzione del `WebServer`
 Arduino con `esp_https_server`, oltre alla gestione sicura del certificato e
-della chiave del dispositivo. Questa migrazione non e implementata nella
+della chiave del dispositivo. Questa migrazione non è implementata nella
 versione 1.2.1. Riferimento ufficiale:
 <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/protocols/esp_https_server.html>.
 
@@ -41,16 +41,16 @@ versione 1.2.1. Riferimento ufficiale:
 
 Gli endpoint eventi e notifiche accettano esclusivamente URL `https://`. Il
 firmware richiede una CA configurata, verifica il certificato del server e non
-usa modalita TLS insicura. Sono supportati anche certificato e chiave client
+usa modalità TLS insicura. Sono supportati anche certificato e chiave client
 per mTLS; la chiave privata non viene mai restituita dall'API delle
-impostazioni. Il token Bearer resta disponibile come identita applicativa del
+impostazioni. Il token Bearer resta disponibile come identità applicativa del
 dispositivo.
 
 Le pesate `scale.snapshot` possono inoltre essere firmate HMAC-SHA256. Il
 gestionale deve confrontare la firma in tempo costante e deduplicare
 `event_id`; HMAC autentica il payload ma non sostituisce TLS.
 
-MQTT e opzionale e usa lo stesso archivio CA e, se configurato, lo stesso
+MQTT è opzionale e usa lo stesso archivio CA e, se configurato, lo stesso
 certificato client mTLS. I soli comandi ammessi sono `display.set`,
 `config.sync` e `diagnostics.run`; ogni altro comando viene rifiutato. Il
 firmware non mantiene una coda MQTT persistente. La configurazione remota e
@@ -78,7 +78,7 @@ ha ricevuto e accettato la richiesta.
 
 Token, segreto HMAC, password Wi-Fi, password amministrativa e chiave privata
 mTLS sono
-conservati nella NVS della scheda. La NVS non e cifrata in questa build: per
+conservati nella NVS della scheda. La NVS non è cifrata in questa build: per
 protezione contro accesso fisico e lettura flash servono Secure Boot, Flash
 Encryption e provisioning delle chiavi in produzione. L'OTA applicativo
 richiede una firma ECDSA-P256 ed esegue la validazione del nuovo avvio con

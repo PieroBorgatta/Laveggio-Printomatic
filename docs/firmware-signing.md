@@ -13,7 +13,7 @@ Il build script cerca per impostazione predefinita:
 %USERPROFILE%\.casklogic\pesalink-signing\private_key.pem
 ```
 
-La posizione puo essere sostituita con `PESALINK_SIGNING_KEY`. Per continuita
+La posizione può essere sostituita con `PESALINK_SIGNING_KEY`. Per continuità
 con le installazioni precedenti, il processo accetta anche il percorso storico
 `.casklogic\laveggio-signing\private_key.pem` e la variabile
 `LAVEGGIO_SIGNING_KEY`. La chiave va
@@ -40,21 +40,21 @@ $env:PLATFORMIO_CORE_DIR = 'C:\pio'
 py -m platformio run
 ```
 
-La firma DER e aggiunta al binario in un blocco finale da 512 byte, come
+La firma DER è aggiunta al binario in un blocco finale da 512 byte, come
 richiesto da `Update.installSignature()`. Il firmware verifica firma e
 dimensione prima di selezionare la nuova partizione. Al primo avvio esegue i
 controlli minimi e marca l'immagine valida; in caso contrario richiede il
 rollback. Ogni tentativo viene registrato in `/updates/registry.ndjson`.
 
 Dal portale, la selezione del file e l'unica operazione manuale. Il browser
-trasmette blocchi ordinati da 12 KiB, verificati per offset e completezza, cosi
+trasmette blocchi ordinati da 12 KiB, verificati per offset e completezza, così
 anche una rete debole non dipende da una singola richiesta HTTP molto lunga.
 Dopo la conferma vengono mostrati avanzamento, verifica della firma, riavvio
 automatico e versione effettivamente tornata online. Un errore resta visibile
 nel pannello senza essere affidato soltanto a una notifica temporanea.
 
 Questa protezione impedisce l'installazione dal portale di un binario non
-firmato. Non protegge da un attaccante con accesso fisico alla flash finche non
+firmato. Non protegge da un attaccante con accesso fisico alla flash finché non
 vengono provisionati anche Secure Boot e Flash Encryption tramite eFuse. Tali
 operazioni sono irreversibili e devono essere provate sulla scheda reale con
 una procedura di recupero documentata.

@@ -95,11 +95,11 @@ calibrazione reale.
 
 ## Trasporto
 
-Il dispositivo usa richieste `HTTPS POST` asincrone e puo pubblicare via MQTT
+Il dispositivo usa richieste `HTTPS POST` asincrone e può pubblicare via MQTT
 TLS senza interrompere la scansione dei sensori. Il certificato CA deve essere
 configurato dall'interfaccia web; il firmware rifiuta endpoint HTTP e TLS privo
 di una CA attendibile. Certificato e chiave client opzionali consentono mTLS.
-Ogni pesata puo essere firmata HMAC-SHA256. Non e presente una coda persistente
+Ogni pesata può essere firmata HMAC-SHA256. Non è presente una coda persistente
 di trasmissione. Il backend deve includere:
 
 - TLS con CA configurata sul dispositivo;

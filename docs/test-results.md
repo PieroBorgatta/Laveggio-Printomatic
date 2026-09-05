@@ -28,7 +28,8 @@ comprese ordine dei byte RGB565, volume audio, arresto I2S, microSD e cache web.
 - Flash finale su COM5 riuscito con verifica hash e riavvio, mantenendo la
   partizione NVS. Seriale: `firmware_version=2.1.0`.
 - **Colori del display confermati corretti dall'utente dopo l'ultimo flash.**
-- MicroSD SDXC da 128 GB montata; prova di lettura/scrittura riuscita.
+- SanDisk Extreme microSDXC da 128 GB (B07FCMKK5X) montata; prova di
+  lettura/scrittura riuscita.
 - Touch CST328 rilevato tramite fallback, QMI8658 e PCF85063 raggiungibili;
   batteria letta a circa 4,21 V. Speaker inizializzato. Questi stati non
   attestano tutte le gesture, accuratezza dei sensori o qualità del suono.
@@ -52,8 +53,8 @@ interruzioni di rete o riavvii.
 ## Firmware 2.0.5 e verifica hardware - 4 settembre 2026
 
 - `28/28` test Node.js del simulatore superati;
-- asset CSS e JavaScript versionati e serviti senza cache, cosi il pannello non puo riutilizzare il codice di un firmware precedente;
-- corretto l'ordine dei byte RGB565 sul bus del display: il blu `#243b6b`, il fondo `#f5f7fa`, i pannelli bianchi e il testo antracite non vengono piu trasformati in oro, verde e viola;
+- asset CSS e JavaScript versionati e serviti senza cache, così il pannello non può riutilizzare il codice di un firmware precedente;
+- corretto l'ordine dei byte RGB565 sul bus del display: il blu `#243b6b`, il fondo `#f5f7fa`, i pannelli bianchi e il testo antracite non vengono più trasformati in oro, verde e viola;
 - volume PCM5101 regolabile dal portale tra 0 e 100%, persistente e condiviso da conferma sonora e bip di prova;
 - boot display di 10 secondi con logo CaskLogic centrale e barra di avanzamento;
 - aggiornamento incrementale dei valori live senza ricostruire card e pannelli;
@@ -62,7 +63,8 @@ interruzioni di rete o riavvii.
 - caricamento USB riuscito su ESP32-S3 con flash da 16 MB e PSRAM da 8 MB;
 - avvio seriale confermato con `firmware=2.0.5` e access point di recupero attivo;
 - SSID originale ripristinato a `LP-PW_casklogic-192_168_4_1`.
-- microSD SDXC da 128 GB montata e verificata (`121942 MB` fisici, `121911 MB` filesystem) senza piu conflitti sul clock SD_MMC.
+- SanDisk Extreme microSDXC da 128 GB montata e verificata (`121942 MB` fisici,
+  `121911 MB` filesystem) senza più conflitti sul clock SD_MMC.
 
 ## Porting Waveshare ESP32-S3-Touch-LCD-2.8 - 1 settembre 2026
 
@@ -79,7 +81,7 @@ Verifica eseguita senza la nuova scheda fisica:
 - telemetria simulata di touch, speaker, batteria, QMI8658 e PCF85063 visibile;
 - nessun errore JavaScript di esecuzione osservato nel flusso controllato.
 
-La compilazione verifica API e compatibilita software, non il comportamento
+La compilazione verifica API e compatibilità software, non il comportamento
 elettrico. ST7789, touch, audio PCM5101, GPIO batteria, RTC, IMU, microSD SD_MMC,
 power hold e I2C esterno devono passare la checklist
 [`friday-hardware-validation.md`](friday-hardware-validation.md) sulla scheda.

@@ -1,6 +1,6 @@
 # Enclosure for Adafruit 4ch QT Mux 5664 PCA9546
 
-> Questo case e progettato per il modello STEMMA QT Adafruit cod. 5664 e non e
+> Questo case è progettato per il modello STEMMA QT Adafruit cod. 5664 e non è
 > compatibile con il PCA9546 compatto cod. 5663 ora previsto dalla distinta
 > materiali. I file restano inclusi esclusivamente come archivio del progetto.
 

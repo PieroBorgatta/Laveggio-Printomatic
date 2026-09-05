@@ -1,6 +1,6 @@
 # Prompt per integrare CaskLogic
 
-Usare questo prompt in un'attivita separata aperta sul repository CaskLogic:
+Usare questo prompt in un'attività separata aperta sul repository CaskLogic:
 
 ```text
 Nel repository C:\GESTIONALE-TESTA-E-CODA\CaskLogic-GestionaleSfuso implementa
@@ -8,7 +8,7 @@ l'integrazione del sistema CaskLogic PesaLink collegato alla pesa Laveggio
 Printomatic. Prima leggi, senza
 modificarlo, il contratto nel repository
 C:\GESTIONALE-TESTA-E-CODA\Laveggio-Printomatic\docs\casklogic-integration-contract.md
-e verifica i pattern gia presenti nel backend, nel realtime e nel kiosk.
+e verifica i pattern già presenti nel backend, nel realtime e nel kiosk.
 
 Implementa POST /api/v1/scale-devices/events con autenticazione Bearer per
 dispositivo, token conservati solo come hash, validazione schema version 1 e
@@ -24,7 +24,7 @@ canonica, non implementare accesso NAS e non introdurre una coda persistente
 sul dispositivo.
 
 Integra MQTT tramite TLS come canale realtime opzionale e preferenziale, senza
-eliminare l'endpoint HTTPS di compatibilita. Implementa ACL per dispositivo sui
+eliminare l'endpoint HTTPS di compatibilità. Implementa ACL per dispositivo sui
 topic availability, weights, status, commands e command-acks descritti nel
 contratto, Last Will offline, stato online/freschezza e test di riconnessione.
 I soli comandi ammessi al gateway sono display.set, config.sync e
@@ -51,14 +51,14 @@ Nel kiosk mantieni sempre disponibile l'inserimento manuale. Un aggiornamento
 automatico non deve sovrascrivere un campo mentre l'operatore lo sta editando e
 non deve mai salvare automaticamente lordo, tara o una pesata. Per una nuova
 pesata mostra il valore live come proposta di Lordo; per una bozza che possiede
-gia il lordo proponilo come Tara senza toccare il lordo esistente. La conferma
+già il lordo proponilo come Tara senza toccare il lordo esistente. La conferma
 dell'operatore resta obbligatoria. Mostra stato dispositivo, freschezza,
-stabilita e fallback manuale quando il dato e assente o scaduto.
+stabilità e fallback manuale quando il dato è assente o scaduto.
 
 Aggiungi migrazioni, modelli, servizi, endpoint amministrativi per registrare e
 revocare dispositivi, audit filtrabile, test backend, test frontend e verifica
-browser autenticata. Riusa grafica, dialoghi e convenzioni gia presenti nel
+browser autenticata. Riusa grafica, dialoghi e convenzioni già presenti nel
 gestionale. Non modificare flussi estranei e non eseguire deploy, commit o push
-finche non te lo autorizzo esplicitamente. Alla fine elenca file modificati,
+finché non te lo autorizzo esplicitamente. Alla fine elenca file modificati,
 test eseguiti e decisioni ancora da confermare sull'hardware reale.
 ```

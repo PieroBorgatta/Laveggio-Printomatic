@@ -110,7 +110,7 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.batteryDividerMilli = preferences_.getUShort("bat_div", 3000);
   config_.batteryMinMv = preferences_.getUShort("bat_min_mv", 3200);
   config_.batteryMaxMv = preferences_.getUShort("bat_max_mv", 4200);
-  config_.batteryCapacityMah = preferences_.getUShort("bat_cap_mah", 1200);
+  config_.batteryCapacityMah = preferences_.getUShort("bat_cap_mah", 1000);
 
   // Aggiorna solo i vecchi valori automatici; le personalizzazioni dell'operatore restano intatte.
   if (config_.deviceId == legacyDeviceId) {

@@ -2477,7 +2477,7 @@ void registerWebRoutes() {
         deviceId.length() > 96 || configSyncUrl.length() >= sizeof(OutboundMessage::url) ||
         mqttHost.length() > 253 || mqttUsername.length() > 128 || mqttPassword.length() > 256 ||
         mqttBaseTopic.length() > 160 || eventHmacSecret.length() > 256 || metricsToken.length() > 256) {
-      sendError(400, "Uno o piu campi superano i limiti del dispositivo");
+      sendError(400, "Uno o più campi superano i limiti del dispositivo");
       return;
     }
     if ((!backendUrl.isEmpty() && !backendUrl.startsWith("https://")) ||
@@ -2501,7 +2501,7 @@ void registerWebRoutes() {
       return;
     }
     if (mqttBaseTopic.indexOf('#') >= 0 || mqttBaseTopic.indexOf('+') >= 0) {
-      sendError(400, "Il topic MQTT non puo contenere wildcard");
+      sendError(400, "Il topic MQTT non può contenere wildcard");
       return;
     }
     const String effectivePrivateKey = clientPrivateKey.isEmpty()
@@ -2805,7 +2805,7 @@ void initializeStorage() {
     return;
   }
 
-  // Le SDXC da 64/128 GB sono piu sensibili all'integrita del segnale sullo
+  // Le SDXC da 64/128 GB sono più sensibili all'integrità del segnale sullo
   // slot integrato. Prova prima 20 MHz e poi 10 MHz, sempre in bus a 1 bit.
   constexpr int kSdFrequencies[] = {20000, 10000};
   for (const int frequencyKhz : kSdFrequencies) {
@@ -2820,7 +2820,7 @@ void initializeStorage() {
     return;
   }
   Serial.printf(
-    "MicroSD: montata, capacita=%llu MB, filesystem=%llu MB\n",
+    "MicroSD: montata, capacità=%llu MB, filesystem=%llu MB\n",
     SD_MMC.cardSize() / (1024ULL * 1024ULL),
     SD_MMC.totalBytes() / (1024ULL * 1024ULL)
   );

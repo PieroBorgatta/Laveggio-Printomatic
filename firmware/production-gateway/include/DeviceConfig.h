@@ -58,7 +58,7 @@ struct DeviceConfig {
   uint16_t batteryDividerMilli = 3000;
   uint16_t batteryMinMv = 3200;
   uint16_t batteryMaxMv = 4200;
-  uint16_t batteryCapacityMah = 1200;
+  uint16_t batteryCapacityMah = 1000;
   uint8_t sensorOrder[4] = {0,1,2,3};
   uint32_t calibrationRevision = 0;
   bool calibrationChecksumValid = true;
