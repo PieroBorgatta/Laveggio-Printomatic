@@ -16,6 +16,8 @@ non sono valide per transazioni commerciali o verifiche metrologiche legali.
 - display ST7789 240×320 controllabile dal web, con cinque pagine a card, swipe orizzontale, scroll verticale, footer touch e fallback BOOT;
 - touch con autodetect CST3530 per V2 e CST328 per V1;
 - doppio tono su speaker PCM5101 alla conferma della pesata, disabilitabile e persistente dal portale;
+- volume speaker persistente da 0 a 100%, applicato sia alla conferma sia alla prova audio manuale;
+- palette copiata dal portale interno del dispositivo e rendering incrementale per eliminare i lampeggiamenti degli aggiornamenti live;
 - monitoraggio integrato di batteria GPIO8, QMI8658 e RTC PCF85063;
 - storico e log NDJSON settimanali in cartelle anno/mese su microSD FAT32;
 - campione diagnostico dei quattro sensori registrato ogni minuto;
@@ -65,10 +67,10 @@ Artefatti principali:
 - `.pio/build/<profilo>/firmware.factory.bin`: prima installazione completa,
   da usare quando si passa dalla vecchia ESP32-C6 alla ESP32-S3.
 
-Misure della build `2.0.0` verificata il 1 settembre 2026 per entrambi i profili:
+Misure della build `2.1.0` verificata il 5 settembre 2026 sui profili Waveshare V2/V1:
 
-- RAM statica: `54.436 / 327.680 byte` (`16,6%`);
-- flash applicazione: `1.657.078 / 6.291.456 byte` (`26,3%`).
+- RAM statica: `59.004 / 327.680 byte` (`18,0%`);
+- flash applicazione: `1.713.714 / 6.291.456 byte` (`27,2%`).
 
 Le due partizioni OTA occupano `0x600000` byte, cioe 6 MiB ciascuna, sulla flash
 da 16 MB. La partizione SPIFFS e stata rimossa perche gli asset web sono
@@ -101,7 +103,7 @@ sezioni dell'interfaccia senza la scheda collegata.
 
 Se non trova credenziali Wi-Fi salvate, il dispositivo crea:
 
-- SSID `PesaLink_casklogic-192_168_4_1`;
+- SSID `LP-PW_casklogic-192_168_4_1`;
 - password `casklogic`;
 - indirizzo `http://192.168.4.1`.
 

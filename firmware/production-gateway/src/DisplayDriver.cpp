@@ -24,20 +24,24 @@ constexpr uint8_t kCst3530Address = 0x58;
 constexpr uint16_t kWidth = 240;
 constexpr uint16_t kHeight = 320;
 
-constexpr uint16_t kNavy = 0x1189;
-constexpr uint16_t kBlue = 0x2AEF;
-constexpr uint16_t kLightBlue = 0xDDFB;
-constexpr uint16_t kTeal = 0x2C73;
+// RGB565 palette copied from the device's own web interface.
+constexpr uint16_t kNavy = 0x08A4;         // #0e1520
+constexpr uint16_t kBlue = 0x21CD;         // #243b6b
+constexpr uint16_t kLightBlue = 0x32EF;    // #2f5e7a
+constexpr uint16_t kTeal = 0x7D15;         // #7fa3ae
 constexpr uint16_t kWhite = 0xFFFF;
-constexpr uint16_t kSurface = 0xF7BF;
-constexpr uint16_t kSurfaceBlue = 0xEFFD;
-constexpr uint16_t kMuted = 0x63D1;
-constexpr uint16_t kGreen = 0x2C4A;
-constexpr uint16_t kGreenSurface = 0xE747;
-constexpr uint16_t kAmber = 0xC423;
-constexpr uint16_t kAmberSurface = 0xF6A4;
+constexpr uint16_t kText = 0x1926;         // #1a2430
+constexpr uint16_t kSurface = 0xF7BF;      // #f5f7fa
+constexpr uint16_t kSurfaceBlue = 0xFFFF;  // #ffffff
+constexpr uint16_t kBorder = 0xDF1D;       // #d9e2ea
+constexpr uint16_t kMuted = 0x5B2E;        // #586776
+constexpr uint16_t kGreen = 0x2C4A;        // #2e8b57
+constexpr uint16_t kGreenLight = 0x7D15;   // #7fa3ae
+constexpr uint16_t kGreenSurface = 0xEFBD; // #eaf4ee
+constexpr uint16_t kAmber = 0xD443;        // #d18a1d
+constexpr uint16_t kAmberSurface = 0xFFBC; // #fff5e6
 constexpr uint16_t kRed = 0xCA69;
-constexpr uint16_t kRedSurface = 0xF3AE;
+constexpr uint16_t kRedSurface = 0xFF7D;   // #fceced
 
 const uint8_t *glyphFor(char value) {
   static const uint8_t blank[5] = {0, 0, 0, 0, 0};
@@ -120,7 +124,7 @@ void DisplayDriver::fillRect(uint16_t x, uint16_t y, uint16_t width, uint16_t he
   const uint8_t high = color >> 8;
   const uint8_t low = color;
   for (uint32_t index = 0; index < static_cast<uint32_t>(width) * height; ++index) {
-    SPI.transfer(high); SPI.transfer(low);
+    SPI.transfer(low); SPI.transfer(high);
   }
   digitalWrite(kLcdCs, HIGH);
   SPI.endTransaction();
@@ -141,8 +145,8 @@ void DisplayDriver::drawLogo(uint16_t x, uint16_t y) {
     const uint8_t bit = 1U << (7 - index % 8);
     const bool navy = (pgm_read_byte(DISPLAY_LOGO_NAVY + index / 8) & bit) != 0;
     const bool teal = (pgm_read_byte(DISPLAY_LOGO_TEAL + index / 8) & bit) != 0;
-    const uint16_t pixel = teal ? kTeal : (navy ? kNavy : kWhite);
-    SPI.transfer(pixel >> 8); SPI.transfer(pixel);
+    const uint16_t pixel = teal ? kTeal : (navy ? kBlue : kSurface);
+    SPI.transfer(pixel); SPI.transfer(pixel >> 8);
   }
   digitalWrite(kLcdCs, HIGH);
   SPI.endTransaction();
@@ -165,7 +169,7 @@ void DisplayDriver::drawText(int x, int y, const char *text, uint8_t scale, uint
       const uint8_t column = (pixelX / scale) % 6U;
       const uint8_t *glyph = glyphFor(text[character]);
       const uint16_t pixel = column < 5 && (glyph[column] & (1U << row)) ? color : background;
-      SPI.transfer(pixel >> 8); SPI.transfer(pixel);
+      SPI.transfer(pixel); SPI.transfer(pixel >> 8);
     }
   }
   digitalWrite(kLcdCs, HIGH);
@@ -307,25 +311,54 @@ void DisplayDriver::drawPill(uint16_t x, uint16_t y, const char *text, uint16_t 
 }
 
 void DisplayDriver::drawFooter() {
-  fillRect(0, 292, kWidth, 28, kNavy);
+  fillRect(0, 292, kWidth, 28, kBlue);
   for (uint8_t index = 0; index < kPageCount; ++index) {
     const uint16_t x = index * 48;
-    if (index == page_) fillCard(x + 13, 301, 22, 8, kTeal);
-    else fillCard(x + 20, 303, 8, 4, kMuted);
+    if (index == page_) fillCard(x + 13, 301, 22, 8, kWhite);
+    else fillCard(x + 20, 303, 8, 4, kTeal);
   }
 }
 
 void DisplayDriver::drawPageFrame(const char *title) {
-  fillRect(0, 0, kWidth, kHeight, kWhite); fillRect(0, 0, kWidth, 50, kNavy); fillRect(0, 46, kWidth, 4, kTeal);
-  drawText(12, 10, "CASKLOGIC", 2, kWhite, kNavy); drawText(12, 30, title, 1, kLightBlue, kNavy);
+  fillRect(0, 0, kWidth, kHeight, kSurface); fillRect(0, 0, kWidth, 50, kBlue); fillRect(0, 46, kWidth, 4, kLightBlue);
+  drawText(12, 10, "CASKLOGIC", 2, kWhite, kBlue); drawText(12, 30, title, 1, kWhite, kBlue);
   char pageLabel[8]; snprintf(pageLabel, sizeof(pageLabel), "%u/%u", page_ + 1, kPageCount);
-  drawText(198, 18, pageLabel, 1, kWhite, kNavy); drawFooter();
+  drawText(198, 18, pageLabel, 1, kWhite, kBlue); drawFooter();
+}
+
+void DisplayDriver::showBootSplash(uint32_t durationMs) {
+  if (!enabled_) return;
+  if (durationMs == 0) durationMs = 1;
+  fillRect(0, 0, kWidth, kHeight, kSurface);
+  const uint16_t logoX = (kWidth - DISPLAY_LOGO_WIDTH) / 2;
+  drawLogo(logoX, 70);
+  drawText(66, 166, "CASKLOGIC", 2, kBlue, kSurface);
+  drawText(96, 190, "PESALINK", 1, kLightBlue, kSurface);
+  drawText(78, 238, "AVVIO IN CORSO", 1, kMuted, kSurface);
+  fillCard(26, 260, 188, 14, kBorder);
+  fillCard(28, 262, 184, 10, kWhite);
+
+  const uint32_t startedAt = millis();
+  uint16_t lastWidth = 0;
+  while (millis() - startedAt < durationMs) {
+    const uint32_t elapsed = millis() - startedAt;
+    const uint16_t width = std::min<uint16_t>(184, static_cast<uint16_t>((elapsed * 184ULL) / durationMs));
+    if (width > lastWidth) {
+      fillRect(28 + lastWidth, 262, width - lastWidth, 10, kLightBlue);
+      lastWidth = width;
+    }
+    delay(20);
+  }
+  if (lastWidth < 184) fillRect(28 + lastWidth, 262, 184 - lastWidth, 10, kLightBlue);
+  lastRenderMs_ = 0;
+  lastWeightKg_ = UINT32_MAX;
+  pageDirty_ = true;
 }
 
 void DisplayDriver::drawFrame() {
   drawPageFrame("PESATURA LIVE"); fillCard(10, 61, 220, 108, kSurfaceBlue);
   drawText(22, 72, "PESO RILEVATO", 1, kMuted, kSurfaceBlue); drawText(184, 143, "KG", 2, kMuted, kSurfaceBlue);
-  drawText(36, 179, "USO INTERNO - NON FISCALE", 1, kMuted, kWhite); lastWeightKg_ = UINT32_MAX; pageDirty_ = false;
+  drawText(36, 179, "USO INTERNO - NON FISCALE", 1, kMuted, kSurface); lastWeightKg_ = UINT32_MAX; pageDirty_ = false;
 }
 
 void DisplayDriver::drawStatusRow(uint16_t y, const char *label, const String &value, uint16_t color) {
@@ -352,32 +385,32 @@ void DisplayDriver::previousPage() {
   lastRenderMs_ = 0; lastWeightKg_ = UINT32_MAX; pageDirty_ = true;
 }
 
-void DisplayDriver::drawWrappedText(int x, int y, const String &text, uint8_t maxRows, uint16_t color) {
+void DisplayDriver::drawWrappedText(int x, int y, const String &text, uint8_t maxRows, uint16_t color, uint16_t background) {
   String normalized = text; normalized.toUpperCase(); constexpr size_t kCharactersPerRow = 35;
   for (uint8_t row = 0; row < maxRows; ++row) {
     const size_t start = row * kCharactersPerRow; if (start >= normalized.length()) break;
     const String line = normalized.substring(start, start + kCharactersPerRow);
-    drawText(x, y + row * 12, line.c_str(), 1, color, kWhite);
+    drawText(x, y + row * 12, line.c_str(), 1, color, background);
   }
 }
 
 void DisplayDriver::showNetworkInfo(const String &ssid, const String &wifiPassword, const String &ipAddress, const String &adminUser, const String &adminPassword) {
   if (!enabled_) return;
   networkInfoUntilMs_ = millis() + 30000; drawPageFrame("PRIMO ACCESSO");
-  fillCard(10, 62, 220, 58, kSurfaceBlue); drawText(20, 72, "RETE WIFI", 1, kMuted, kSurfaceBlue); drawWrappedText(20, 91, ssid, 2, kNavy);
+  fillCard(10, 62, 220, 58, kSurfaceBlue); drawText(20, 72, "RETE WIFI", 1, kMuted, kSurfaceBlue); drawWrappedText(20, 91, ssid, 2, kText, kSurfaceBlue);
   fillCard(10, 128, 220, 54, kGreenSurface); drawText(20, 138, "APRI NEL BROWSER", 1, kGreen, kGreenSurface);
-  drawWrappedText(20, 157, String("HTTP://") + ipAddress, 1, kNavy);
-  fillCard(10, 190, 220, 88, kSurface); drawText(20, 201, "UTENTE", 1, kMuted, kSurface); drawWrappedText(82, 201, adminUser, 1, kNavy);
-  drawText(20, 223, "PASSWORD", 1, kMuted, kSurface); drawWrappedText(82, 223, adminPassword, 1, kNavy);
-  if (!wifiPassword.isEmpty()) { drawText(20, 249, "PASSWORD WIFI", 1, kMuted, kSurface); drawWrappedText(116, 249, wifiPassword, 1, kNavy); }
+  drawWrappedText(20, 157, String("HTTP://") + ipAddress, 1, kText, kGreenSurface);
+  fillCard(10, 190, 220, 88, kSurfaceBlue); drawText(20, 201, "UTENTE", 1, kMuted, kSurfaceBlue); drawWrappedText(82, 201, adminUser, 1, kText, kSurfaceBlue);
+  drawText(20, 223, "PASSWORD", 1, kMuted, kSurfaceBlue); drawWrappedText(82, 223, adminPassword, 1, kText, kSurfaceBlue);
+  if (!wifiPassword.isEmpty()) { drawText(20, 249, "PASSWORD WIFI", 1, kMuted, kSurfaceBlue); drawWrappedText(116, 249, wifiPassword, 1, kText, kSurfaceBlue); }
 }
 
 void DisplayDriver::showFactoryReset() {
   resetProgressActive_ = true; networkInfoUntilMs_ = millis() + 3600000UL; ledcWrite(kLcdBacklight, 650);
-  fillRect(0, 0, kWidth, kHeight, kWhite); fillRect(0, 0, kWidth, 54, kRed); drawText(14, 17, "RIPRISTINO", 2, kWhite, kRed);
-  fillCard(14, 92, 212, 110, kRedSurface); drawText(28, 112, "CONFIGURAZIONE", 2, kNavy, kRedSurface);
-  drawText(28, 146, "AZZERATA", 3, kRed, kRedSurface); drawText(28, 220, "RILASCIA BOOT", 2, kAmber, kWhite);
-  drawText(28, 248, "PER RIAVVIARE", 2, kMuted, kWhite);
+  fillRect(0, 0, kWidth, kHeight, kNavy); fillRect(0, 0, kWidth, 54, kRed); drawText(14, 17, "RIPRISTINO", 2, kWhite, kRed);
+  fillCard(14, 92, 212, 110, kRedSurface); drawText(28, 112, "CONFIGURAZIONE", 2, kText, kRedSurface);
+  drawText(28, 146, "AZZERATA", 3, kRed, kRedSurface); drawText(28, 220, "RILASCIA BOOT", 2, kAmber, kNavy);
+  drawText(28, 248, "PER RIAVVIARE", 2, kMuted, kNavy);
 }
 
 void DisplayDriver::showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs) {
@@ -385,14 +418,14 @@ void DisplayDriver::showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalM
   const uint32_t now = millis(); if (resetProgressActive_ && now - lastResetProgressMs_ < 100) return; lastResetProgressMs_ = now;
   if (!resetProgressActive_) {
     resetProgressActive_ = true; networkInfoUntilMs_ = millis() + 3600000UL; ledcWrite(kLcdBacklight, 650);
-    fillRect(0, 0, kWidth, kHeight, kWhite); fillRect(0, 0, kWidth, 54, kAmber); drawText(14, 17, "RIPRISTINO", 2, kNavy, kAmber);
-    drawText(18, 82, "TIENI PREMUTO BOOT", 2, kNavy, kWhite); drawText(18, 245, "RILASCIA PER ANNULLARE", 1, kMuted, kWhite);
+    fillRect(0, 0, kWidth, kHeight, kNavy); fillRect(0, 0, kWidth, 54, kAmber); drawText(14, 17, "RIPRISTINO", 2, kNavy, kAmber);
+    drawText(18, 82, "TIENI PREMUTO BOOT", 2, kText, kNavy); drawText(18, 245, "RILASCIA PER ANNULLARE", 1, kMuted, kNavy);
   }
   elapsedMs = std::min(elapsedMs, totalMs); const uint16_t progressWidth = static_cast<uint16_t>((elapsedMs * 204ULL) / totalMs);
   fillCard(16, 172, 208, 28, kMuted); fillCard(18, 174, 204, 24, kSurface); if (progressWidth > 0) fillCard(18, 174, progressWidth, 24, kAmber);
-  fillRect(18, 120, 204, 35, kWhite); char countdown[20];
+  fillRect(18, 120, 204, 35, kNavy); char countdown[20];
   snprintf(countdown, sizeof(countdown), "MANCANO %LU S", static_cast<unsigned long>((totalMs - elapsedMs + 999) / 1000));
-  drawText(28, 130, countdown, 2, kNavy, kWhite);
+  drawText(28, 130, countdown, 2, kText, kNavy);
 }
 
 void DisplayDriver::cancelFactoryResetProgress() {
@@ -421,7 +454,7 @@ void DisplayDriver::drawWeightPage(const laveggio::SensorReading readings[lavegg
     const uint16_t background = snapshot.stable ? kGreenSurface : kSurfaceBlue;
     fillCard(10, 61, 220, 108, background); drawText(22, 72, "PESO RILEVATO", 1, kMuted, background);
     char weight[10]; if (snapshot.valid) snprintf(weight, sizeof(weight), "%lu", snapshot.weightKg); else snprintf(weight, sizeof(weight), "-----");
-    drawText(20, 99, weight, 5, snapshot.stable ? kGreen : kNavy, background); drawText(184, 143, "KG", 2, kMuted, background);
+    drawText(20, 99, weight, 5, snapshot.stable ? kGreen : kText, background); drawText(184, 143, "KG", 2, kMuted, background);
     drawPill(146, 72, snapshot.stable ? "STABILE" : "IN LETTURA", snapshot.stable ? kGreen : kBlue);
     lastWeightKg_ = snapshot.weightKg; lastValid_ = snapshot.valid; lastStable_=snapshot.stable;
   }
@@ -438,7 +471,7 @@ void DisplayDriver::drawWeightPage(const laveggio::SensorReading readings[lavegg
 }
 
 void DisplayDriver::drawSensorsPage(const laveggio::SensorReading readings[laveggio::kChannelCount]) {
-  if (pageDirty_) drawPageFrame("SENSORI AS5600"); fillRect(0, 50, kWidth, 242, kWhite);
+  if (pageDirty_) { drawPageFrame("SENSORI AS5600"); fillRect(0, 50, kWidth, 242, kSurface); }
   const uint8_t first = std::min<uint8_t>(scrollRow_, 1);
   for (uint8_t visible = 0; visible < 4 && first + visible < laveggio::kChannelCount; ++visible) {
     const uint8_t channel = first + visible; const uint16_t y = 58 + visible * 57;
@@ -446,7 +479,7 @@ void DisplayDriver::drawSensorsPage(const laveggio::SensorReading readings[laveg
     char title[24]; snprintf(title, sizeof(title), "SENSORE %u   RAW %04U", channel + 1, readings[channel].raw);
     drawText(20, y + 8, title, 1, readings[channel].healthy() ? kGreen : kAmber, background);
     const char *magnet = !readings[channel].present ? "ASSENTE" : readings[channel].magnetWeak() ? "MAGNETE DEBOLE" : readings[channel].magnetStrong() ? "MAGNETE FORTE" : "MAGNETE REGOLARE";
-    drawText(20, y + 23, magnet, 1, kNavy, background); char detail[28];
+    drawText(20, y + 23, magnet, 1, kText, background); char detail[28];
     snprintf(detail, sizeof(detail), "MAG %U  AGC %U", readings[channel].magnitude, readings[channel].agc);
     drawText(20, y + 35, detail, 1, kMuted, background);
   }
@@ -454,10 +487,10 @@ void DisplayDriver::drawSensorsPage(const laveggio::SensorReading readings[laveg
 }
 
 void DisplayDriver::drawNetworkPage(const DisplayStatus &status) {
-  if (pageDirty_) drawPageFrame("RETE E SINCRONIA"); fillRect(0, 50, kWidth, 242, kWhite);
+  if (pageDirty_) { drawPageFrame("RETE E SINCRONIA"); fillRect(0, 50, kWidth, 242, kSurface); }
   struct Row { const char *label; String value; uint16_t color; } rows[] = {
     {"STATO", status.wifiConnected ? "CONNESSA" : (status.accessPointActive ? "ACCESS POINT" : "OFFLINE"), status.wifiConnected ? kGreen : kAmber},
-    {"SSID", status.ssid, kNavy}, {"INDIRIZZO", status.ipAddress, kNavy},
+    {"SSID", status.ssid, kText}, {"INDIRIZZO", status.ipAddress, kText},
     {"SEGNALE", status.wifiConnected ? String(status.rssi) + " DBM" : "--", status.rssi >= -70 ? kGreen : kAmber},
     {"ORA", status.timeSynchronized ? "SINCRONIZZATA" : "IN ATTESA", status.timeSynchronized ? kGreen : kAmber},
     {"RTC", !status.rtcAvailable ? "NON RILEVATO" : (status.rtcClockValid ? status.rtcDateTime : "DA SINCRONIZZARE"), status.rtcClockValid ? kGreen : kAmber}
@@ -468,7 +501,7 @@ void DisplayDriver::drawNetworkPage(const DisplayStatus &status) {
 }
 
 void DisplayDriver::drawSystemPage(const DisplayStatus &status) {
-  if (pageDirty_) drawPageFrame("SISTEMA E BATTERIA"); fillRect(0, 50, kWidth, 242, kWhite);
+  if (pageDirty_) { drawPageFrame("SISTEMA E BATTERIA"); fillRect(0, 50, kWidth, 242, kSurface); }
   const uint16_t batteryBackground = status.batteryConfigured ? kGreenSurface : kSurface; fillCard(10, 58, 220, 64, batteryBackground);
   drawText(20, 68, "BATTERIA", 1, kMuted, batteryBackground); char battery[28];
   if (status.batteryConfigured) snprintf(battery, sizeof(battery), "%U%%  %U MV", status.batteryPercent, status.batteryVoltageMv); else snprintf(battery, sizeof(battery), "NON RILEVATA");
@@ -479,8 +512,8 @@ void DisplayDriver::drawSystemPage(const DisplayStatus &status) {
     {"MEMORIA", String(status.freeHeap / 1024) + " KB", status.freeHeap > 100000 ? kGreen : kAmber},
     {"CPU", String(status.chipTemperatureC, 1) + " C", status.chipTemperatureC < 70 ? kGreen : kAmber},
     {"IMU", status.imuAvailable ? "QMI8658 OK" : "NON RILEVATA", status.imuAvailable ? kGreen : kAmber},
-    {"ASSETTO", status.imuAvailable ? String(status.accelerationX, 1) + "/" + String(status.accelerationY, 1) + "/" + String(status.accelerationZ, 1) + " G" : "--", kNavy},
-    {"UPTIME", String(status.uptimeSeconds / 3600) + " H", kNavy},
+    {"ASSETTO", status.imuAvailable ? String(status.accelerationX, 1) + "/" + String(status.accelerationY, 1) + "/" + String(status.accelerationZ, 1) + " G" : "--", kText},
+    {"UPTIME", String(status.uptimeSeconds / 3600) + " H", kText},
     {"TOUCH", status.touchAvailable ? status.touchController : "NON RILEVATO", status.touchAvailable ? kGreen : kRed}
   };
   const uint8_t first = std::min<uint8_t>(scrollRow_, 3);
@@ -489,14 +522,14 @@ void DisplayDriver::drawSystemPage(const DisplayStatus &status) {
 }
 
 void DisplayDriver::drawServicesPage(const DisplayStatus &status) {
-  if (pageDirty_) drawPageFrame("SERVIZI CASKLOGIC"); fillRect(0, 50, kWidth, 242, kWhite);
+  if (pageDirty_) { drawPageFrame("SERVIZI CASKLOGIC"); fillRect(0, 50, kWidth, 242, kSurface); }
   struct Row { const char *label; String value; uint16_t color; } rows[] = {
     {"API", !status.integrationConfigured ? "NON CONFIGURATA" : (status.integrationOnline ? "ONLINE" : "OFFLINE"), status.integrationOnline ? kGreen : kAmber},
     {"MQTT", !status.mqttEnabled ? "DISATTIVO" : (status.mqttConnected ? "CONNESSO" : "OFFLINE"), status.mqttConnected ? kGreen : kAmber},
     {"HEARTBEAT", String(status.heartbeatFailures) + " ERRORI", status.heartbeatFailures == 0 ? kGreen : kAmber},
-    {"SEQUENZA", String(status.sequence), kNavy},
+    {"SEQUENZA", String(status.sequence), kText},
     {"SPEAKER", !status.speakerReady ? "NON RILEVATO" : (status.speakerEnabled ? "ATTIVO" : "SILENZIOSO"), status.speakerEnabled ? kGreen : kMuted},
-    {"DISPLAY", enabled_ ? "ATTIVO" : "SPENTO", kGreen}, {"FIRMWARE", status.firmwareVersion, kNavy}
+    {"DISPLAY", enabled_ ? "ATTIVO" : "SPENTO", kGreen}, {"FIRMWARE", status.firmwareVersion, kText}
   };
   const uint8_t first = std::min<uint8_t>(scrollRow_, 2);
   for (uint8_t visible = 0; visible < 5 && first + visible < 7; ++visible) drawStatusRow(58 + visible * 44, rows[first + visible].label, rows[first + visible].value, rows[first + visible].color);

@@ -73,7 +73,7 @@ constexpr uint32_t kTimeSyncRetryIntervalMs = 15000;
 constexpr uint32_t kRetentionIntervalMs = 86400000UL;
 constexpr uint32_t kAuthBlockMs = 60000;
 constexpr uint8_t kAuthFailureLimit = 5;
-constexpr char kRescueSsid[] = "PesaLink_casklogic-192_168_4_1";
+constexpr char kRescueSsid[] = "LP-PW_casklogic-192_168_4_1";
 constexpr char kRescuePassword[] = "casklogic";
 constexpr char kAuthRealm[] = "CaskLogic PesaLink v3";
 static_assert(sizeof(kRescueSsid) - 1 <= 32, "Rescue SSID exceeds the Wi-Fi limit");
@@ -153,6 +153,7 @@ bool sdReady = false;
 bool accessPointActive = false;
 bool displayOn = false;
 bool speakerOn = true;
+uint32_t lastSpeakerTestMs = 0;
 bool integrationLastOk = false;
 bool otaSucceeded = false;
 bool otaSignatureVerified = false;
@@ -1380,6 +1381,7 @@ String buildStatusJson() {
   json += ",\"display_on\":" + boolJson(displayOn);
   json += ",\"speaker_on\":" + boolJson(speakerOn);
   json += ",\"speaker_ready\":" + boolJson(speaker.ready());
+  json += ",\"speaker_volume_percent\":" + String(config.speakerVolumePercent);
   json += ",\"scan_rate_hz\":" + String(scansPerSecond);
   json += ",\"network\":{\"connected\":" + boolJson(WiFi.status() == WL_CONNECTED);
   json += ",\"ssid\":" + quoted(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "");
@@ -1531,6 +1533,7 @@ String buildSettingsJson() {
   json += ",\"admin_user\":" + quoted(config.adminUser);
   json += ",\"display_default_on\":" + boolJson(config.displayDefaultOn);
   json += ",\"speaker_default_on\":" + boolJson(config.speakerDefaultOn);
+  json += ",\"speaker_volume_percent\":" + String(config.speakerVolumePercent);
   json += ",\"power_sense_enabled\":" + boolJson(config.powerSenseEnabled);
   json += ",\"history_enabled\":" + boolJson(config.historyEnabled);
   json += ",\"history_keep_forever\":" + boolJson(config.historyKeepForever);
@@ -2125,13 +2128,13 @@ void registerWebRoutes() {
   webServer.on("/app.css", HTTP_GET, [] {
     if (!authorized()) return;
     sendSecurityHeaders();
-    webServer.sendHeader("Cache-Control", "public, max-age=3600");
+    webServer.sendHeader("Cache-Control", "no-store");
     webServer.send_P(200, "text/css; charset=utf-8", WEB_APP_CSS);
   });
   webServer.on("/app.js", HTTP_GET, [] {
     if (!authorized()) return;
     sendSecurityHeaders();
-    webServer.sendHeader("Cache-Control", "public, max-age=3600");
+    webServer.sendHeader("Cache-Control", "no-store");
     webServer.send_P(200, "application/javascript; charset=utf-8", WEB_APP_JS);
   });
   webServer.on("/casklogicmark.png", HTTP_GET, [] {
@@ -2263,6 +2266,49 @@ void registerWebRoutes() {
     if (speakerOn && parseBool(webServer.arg("test"))) speaker.testTone();
     logSystem("info", speakerOn ? "speaker_enabled" : "speaker_disabled", "persisted=true");
     sendJson("{\"ok\":true,\"ready\":" + boolJson(speaker.ready()) + "}");
+  });
+  webServer.on("/api/speaker/test", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (!speaker.ready()) {
+      sendError(409, "Speaker non inizializzato");
+      return;
+    }
+    const uint32_t now = millis();
+    if (lastSpeakerTestMs != 0 && now - lastSpeakerTestMs < 1000) {
+      sendError(429, "Attendere la fine del bip di prova");
+      return;
+    }
+    lastSpeakerTestMs = now;
+    speaker.testTone();
+    logSystem("info", "speaker_test_requested");
+    sendJson("{\"ok\":true,\"ready\":true}");
+  });
+  webServer.on("/api/speaker/volume", HTTP_POST, [] {
+    if (!authorized()) return;
+    if (!webServer.hasArg("volume")) {
+      sendError(400, "Parametro volume mancante");
+      return;
+    }
+    const String value = webServer.arg("volume");
+    for (size_t index = 0; index < value.length(); ++index) {
+      if (!isDigit(value[index])) {
+        sendError(400, "Il volume deve essere compreso tra 0 e 100");
+        return;
+      }
+    }
+    const int volume = value.toInt();
+    if (value.isEmpty() || volume < 0 || volume > 100) {
+      sendError(400, "Il volume deve essere compreso tra 0 e 100");
+      return;
+    }
+    configStore.mutableConfig().speakerVolumePercent = static_cast<uint8_t>(volume);
+    if (!configStore.saveSpeakerVolume()) {
+      sendError(500, "Impossibile salvare il volume");
+      return;
+    }
+    speaker.setVolume(static_cast<uint8_t>(volume));
+    logSystem("info", "speaker_volume_changed", "percent=" + String(volume));
+    sendJson("{\"ok\":true,\"volume\":" + String(volume) + "}");
   });
 
   webServer.on("/api/settings/reliability",HTTP_GET,[] {
@@ -2752,10 +2798,33 @@ void initializeIdentity() {
 void initializeStorage() {
   pinMode(kSdData3, OUTPUT);
   digitalWrite(kSdData3, HIGH);
-  delay(10);
-  sdReady = SD_MMC.setPins(kSdClock, kSdCommand, kSdData0, -1, -1, -1) &&
-    SD_MMC.begin("/sdcard", true, false);
-  if (sdReady) ensureSdDirectories();
+  delay(30);
+  if (!SD_MMC.setPins(kSdClock, kSdCommand, kSdData0, -1, -1, -1)) {
+    Serial.println("MicroSD: configurazione pin fallita");
+    sdReady = false;
+    return;
+  }
+
+  // Le SDXC da 64/128 GB sono piu sensibili all'integrita del segnale sullo
+  // slot integrato. Prova prima 20 MHz e poi 10 MHz, sempre in bus a 1 bit.
+  constexpr int kSdFrequencies[] = {20000, 10000};
+  for (const int frequencyKhz : kSdFrequencies) {
+    sdReady = SD_MMC.begin("/sdcard", true, false, frequencyKhz, 8);
+    if (sdReady && SD_MMC.cardType() != CARD_NONE) break;
+    SD_MMC.end();
+    sdReady = false;
+    delay(120);
+  }
+  if (!sdReady) {
+    Serial.println("MicroSD: non montata; usare FAT32 (exFAT non supportato dal runtime Arduino)");
+    return;
+  }
+  Serial.printf(
+    "MicroSD: montata, capacita=%llu MB, filesystem=%llu MB\n",
+    SD_MMC.cardSize() / (1024ULL * 1024ULL),
+    SD_MMC.totalBytes() / (1024ULL * 1024ULL)
+  );
+  ensureSdDirectories();
 }
 
 void validatePendingOta() {
@@ -2843,15 +2912,18 @@ void setup() {
   }
 
 
+  runtimeReady=acquisition.begin(&boardHardware,configStore.get()) && delivery.begin(&acquisition,configStore.get(),bootId);
+  if(!runtimeReady) { Serial.println("FATAL: acquisition/delivery tasks unavailable"); delay(1000); ESP.restart(); }
   display.begin();
   displayOn = configStore.get().displayDefaultOn;
+  display.setEnabled(true);
+  display.showBootSplash(10000);
   display.setEnabled(displayOn);
   display.configureBrightness(configStore.get().displayBrightness,configStore.get().displayDimSeconds);
   speakerOn = configStore.get().speakerDefaultOn;
   speaker.begin();
   speaker.setEnabled(speakerOn);
-  runtimeReady=acquisition.begin(&boardHardware,configStore.get()) && delivery.begin(&acquisition,configStore.get(),bootId);
-  if(!runtimeReady) { Serial.println("FATAL: acquisition/delivery tasks unavailable"); delay(1000); ESP.restart(); }
+  speaker.setVolume(configStore.get().speakerVolumePercent);
   initializeStorage();
 
   Serial.printf("Rescue AP: %s\n", kRescueSsid);

@@ -13,7 +13,7 @@
   <img alt="Firmware 2.1.0" src="https://img.shields.io/badge/firmware-2.1.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 26 su 26" src="https://img.shields.io/badge/test-26%2F26_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 30 su 30" src="https://img.shields.io/badge/test-30%2F30_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -71,12 +71,12 @@ documentazione hardware.
 | Area | Funzioni disponibili |
 | --- | --- |
 | **Acquisizione** | Quattro AS5600 isolati tramite PCA9546/TCA9546A, calibrazione di dieci posizioni per manopola, tolleranza, isteresi e stabilità |
-| **Interfacce** | Display verticale a card, swipe orizzontale fra cinque pagine, scroll verticale, selezione touch dal footer, dashboard web responsive e tema chiaro/scuro |
-| **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD |
+| **Interfacce** | Display e portale con la stessa palette interna blu `#243b6b`, fondo `#f5f7fa`, pannelli bianchi e testo antracite; boot di 10 secondi con logo centrale e barra; aggiornamenti live incrementali |
+| **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD FAT32, incluse SDXC da 128 GB |
 | **Autodiagnosi** | Test di sensori, microSD, batteria, touch, speaker, IMU, RTC, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore |
-| **Audio** | Doppio tono asincrono su PCM5101 dopo salvataggio SD, tono distinto per errore, disabilitabile e persistente dal portale web |
+| **Audio** | Doppio tono asincrono su PCM5101 dopo il salvataggio SD di una nuova pesata; avviso distinto per errori, disabilitabile e persistente; volume 0–100% regolabile dal portale; il test web emette un singolo bip breve, azzera il DMA e disattiva fisicamente le linee I2S |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
-| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `PesaLink_casklogic-192_168_4_1` |
+| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza originale `LP-PW_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
 | **Aggiornamenti** | OTA firmato ECDSA-P256, doppia partizione, validazione al riavvio, rollback e registro degli esiti |
 
@@ -87,7 +87,7 @@ non trasforma la microSD in un NAS.
 
 | Pagina | Cosa permette di fare |
 | --- | --- |
-| **Riepilogo** | Leggere peso, stabilità, sensori, Wi-Fi, microSD, alimentazione e batteria. Display e conferma sonora hanno interruttori indipendenti e persistenti. |
+| **Riepilogo** | Leggere peso, stabilità, sensori, Wi-Fi, microSD, alimentazione e batteria. Display e conferma sonora hanno interruttori indipendenti e persistenti; il volume 0–100% vale sia per la conferma sia per `Prova bip`. |
 | **Calibrazione** | Associare a ciascuna manopola le dieci posizioni `0–9`, salvare il valore magnetico reale e regolare moltiplicatore, tolleranza e isteresi senza ricompilare il firmware. |
 | **Storico** | Consultare soltanto le 20 pesate più recenti al primo accesso, filtrare e ordinare ogni colonna ed esportare esattamente il risultato dei filtri attivi. |
 | **Rete e gestionale** | Cercare reti Wi-Fi, scegliere DHCP o IP statico, configurare HTTPS/mTLS, HMAC, heartbeat, MQTT TLS e sincronizzazione controllata dal gestionale. |
@@ -282,7 +282,7 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
-- [x] Test host `26/26`, browser Chromium e build firmate ESP32-S3 V2/V1 completati
+- [x] Test host `30/30`, browser Chromium e build firmate ESP32-S3 V2/V1 completati
 - [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
 - [ ] Collaudo completo del display, touch, speaker, RTC in blackout, IMU sulla bascula e batteria
 - [ ] Calibrazione meccanica completa delle quattro manopole

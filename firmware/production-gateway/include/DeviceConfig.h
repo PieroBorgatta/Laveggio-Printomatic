@@ -41,6 +41,7 @@ struct DeviceConfig {
   String adminPassword;
   bool displayDefaultOn = true;
   bool speakerDefaultOn = true;
+  uint8_t speakerVolumePercent = 100;
   bool powerSenseEnabled = false;
   bool powerSenseActiveHigh = true;
   uint32_t stableWindowMs = 600;
@@ -78,6 +79,7 @@ class ConfigStore {
   bool saveReliabilitySettings();
   bool saveDisplayDefaultOn();
   bool saveSpeakerDefaultOn();
+  bool saveSpeakerVolume();
   bool saveHeartbeatRestartSuppressed();
   bool saveRemoteConfigVersion();
   bool saveCalibration(uint8_t channel);

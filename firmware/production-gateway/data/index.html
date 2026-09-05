@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0e1520">
   <title>CaskLogic PesaLink</title>
   <link rel="icon" href="/casklogicmark.png">
-  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/app.css?v=2.0.5">
 </head>
 <body>
   <div class="app-shell">
@@ -38,7 +38,6 @@
         </div>
         <div class="topbar-actions">
           <span class="live-chip"><span class="status-dot"></span><span id="last-update">Live</span></span>
-          <button class="icon-button" id="theme-toggle" title="Cambia tema" aria-label="Cambia tema">◐</button>
         </div>
       </header>
 
@@ -60,6 +59,12 @@
               <span><strong>Conferma sonora</strong><small>Doppio tono dopo il salvataggio della lettura su microSD</small></span>
               <input type="checkbox" id="speaker-toggle"><span class="switch"></span>
             </label>
+            <label class="volume-control" for="speaker-volume">
+              <span><strong>Volume</strong><small>Vale anche per il bip di prova</small></span>
+              <span class="volume-value" id="speaker-volume-value">100%</span>
+              <input id="speaker-volume" type="range" min="0" max="100" step="5" value="100">
+            </label>
+            <button class="button audio-test" id="speaker-test" type="button"><span>Prova bip</span><small>Riproduce un solo bip breve</small></button>
           </div>
         </div>
 
@@ -253,6 +258,6 @@
       <div class="form-actions"><button class="button secondary" value="cancel">Annulla</button><button class="button danger" value="confirm">Conferma</button></div>
     </form>
   </dialog>
-  <script src="/app.js"></script>
+  <script src="/app.js?v=2.0.5"></script>
 </body>
 </html>

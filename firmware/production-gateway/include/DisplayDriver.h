@@ -48,6 +48,7 @@ class DisplayDriver {
   void begin();
   void setEnabled(bool enabled);
   void configureBrightness(uint8_t percent, uint16_t dimSeconds);
+  void showBootSplash(uint32_t durationMs = 10000);
   bool enabled() const { return enabled_; }
   bool touchAvailable() const { return touchController_ != 0; }
   const char *touchControllerName() const {
@@ -101,7 +102,7 @@ class DisplayDriver {
   void fillCard(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint16_t color);
   void drawLogo(uint16_t x, uint16_t y);
   void drawText(int x, int y, const char *text, uint8_t scale, uint16_t color, uint16_t background);
-  void drawWrappedText(int x, int y, const String &text, uint8_t maxRows, uint16_t color);
+  void drawWrappedText(int x, int y, const String &text, uint8_t maxRows, uint16_t color, uint16_t background);
   void drawFrame();
   void drawPageFrame(const char *title);
   void drawStatusRow(uint16_t y, const char *label, const String &value, uint16_t color);
