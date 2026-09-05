@@ -21,3 +21,9 @@ README e il file `LICENSE` presenti nella cartella specifica del modello.
 | Case Waveshare ESP32-C6-LCD-1.47 | Progetto originale | In progettazione; link MakerWorld da aggiungere |
 | Supporti AS5600 | Progetto originale | In progettazione; link MakerWorld da aggiungere |
 | Supporti magneti | Progetto originale | In progettazione; link MakerWorld da aggiungere |
+
+## Timelapse di realizzazione
+
+- [Supporti per i sensori AS5600](../docs/videos/timelapse-supporti-sensori.mp4)
+- [Supporti per i magneti](../docs/videos/timelapse-supporti-magneti.mp4)
+- [Scatola ESP32](../docs/videos/timelapse-scatola-esp32.mp4)

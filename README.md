@@ -188,6 +188,12 @@ flowchart LR
 | Batteria LiPo 803040, 3,7 V, 1000 mAh, protetta | 1 | [Amazon.it · B0G5NM9YJ4](https://www.amazon.it/dp/B0G5NM9YJ4); connettore JST 1,25 mm, polarità da verificare |
 | SanDisk Extreme microSDXC 128 GB, A2 / U3 / V30 | 1 | [Amazon.it · B07FCMKK5X](https://www.amazon.it/dp/B07FCMKK5X); montata e verificata in lettura/scrittura |
 
+### Timelapse della stampa 3D
+
+- [Realizzazione dei supporti per i sensori AS5600](docs/videos/timelapse-supporti-sensori.mp4) — 16 s, MP4 720p
+- [Realizzazione dei supporti per i magneti](docs/videos/timelapse-supporti-magneti.mp4) — 6 s, MP4 720p
+- [Realizzazione della scatola ESP32](docs/videos/timelapse-scatola-esp32.mp4) — 8 s, MP4 720p
+
 La nuova Waveshare integra gestione di carica, misura batteria, RTC, IMU,
 codec PCM5101, amplificatore e slot microSD. Collegamenti e verifiche sono
 descritti in [`docs/power-and-ups.md`](docs/power-and-ups.md).
