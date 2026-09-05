@@ -184,9 +184,13 @@ flowchart LR
 | Antenna Wi-Fi 2,4 GHz 2 dBi, SMA maschio | 1 confezione da 2 | [Amazon.it · B0CR5JPMNX](https://www.amazon.it/dp/B0CR5JPMNX) |
 | Cavo dati Lapp LiYY 4 × 0,14 mm², nero | 1 spezzone da 10 m | [Amazon.it · B0C69CJYZT](https://www.amazon.it/dp/B0C69CJYZT) |
 | Kit viti a macchina svasate nere M2 / M2,5 / M3, acciaio al carbonio | 1 kit da 500 | [Amazon.it · B0D1N4D5ZR](https://www.amazon.it/dp/B0D1N4D5ZR) |
+| Kit da 360 inserti filettati a caldo in ottone M2 / M2,5 / M3 / M4 / M5 / M6 | 1 kit | [Amazon.it · B0G1H5QBSF](https://www.amazon.it/dp/B0G1H5QBSF); utilizzati 8 inserti M5 × 6 mm |
 | Speaker 8 Ω 2 W 2030 | 2 | Inclusi con la scheda Waveshare |
 | Batteria LiPo 803040, 3,7 V, 1000 mAh, protetta | 1 | [Amazon.it · B0G5NM9YJ4](https://www.amazon.it/dp/B0G5NM9YJ4); connettore JST 1,25 mm, polarità da verificare |
 | SanDisk Extreme microSDXC 128 GB, A2 / U3 / V30 | 1 | [Amazon.it · B07FCMKK5X](https://www.amazon.it/dp/B07FCMKK5X); montata e verificata in lettura/scrittura |
+
+Ciascuno dei quattro supporti dei sensori AS5600 utilizza due inserti
+filettati a caldo M5 × 6 mm, per un totale di otto inserti.
 
 ### Timelapse della stampa 3D
 

@@ -27,3 +27,6 @@ README e il file `LICENSE` presenti nella cartella specifica del modello.
 - [Supporti per i sensori AS5600](../docs/videos/timelapse-supporti-sensori.mp4)
 - [Supporti per i magneti](../docs/videos/timelapse-supporti-magneti.mp4)
 - [Scatola ESP32](../docs/videos/timelapse-scatola-esp32.mp4)
+
+Ogni supporto stampato per un sensore AS5600 utilizza due inserti filettati a
+caldo M5 × 6 mm. I quattro supporti richiedono quindi otto inserti complessivi.
