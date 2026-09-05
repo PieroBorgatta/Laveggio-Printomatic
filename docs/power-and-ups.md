@@ -50,3 +50,7 @@ riaccensione, perdita e ritorno USB. La checklist completa e in
 [`friday-hardware-validation.md`](friday-hardware-validation.md).
 
 Riferimento: [documentazione ufficiale Waveshare](https://docs.waveshare.com/ESP32-S3-Touch-LCD-2.8).
+
+## Firmware 2.1
+
+Percentuale da curva LiPo approssimata, avviso basso livello con isteresi, luminosità e attenuazione configurabili. Il tasto batteria può chiudere la microSD e rilasciare POWER_HOLD dopo due secondi. Con USB presente può non spegnere fisicamente la scheda. Provare la sequenza sul dispositivo; resta una stima da tensione, senza misuratore di corrente.

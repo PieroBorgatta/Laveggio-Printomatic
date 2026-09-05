@@ -24,6 +24,9 @@ struct SensorReading {
 struct CalibrationPoint {
   bool enabled = false;
   uint16_t raw = 0;
+  uint16_t noise = 0;
+  uint16_t magnitude = 0;
+  uint8_t agc = 0;
 };
 
 struct ChannelCalibration {
@@ -69,6 +72,8 @@ class StabilityTracker {
  private:
   uint32_t stableWindowMs_;
   uint32_t candidateSinceMs_ = 0;
+  uint32_t lastUpdateMs_ = 0;
+  bool hasUpdate_ = false;
   bool candidateValid_ = false;
   uint8_t candidateDigits_[kChannelCount] = {0, 0, 0, 0};
   int8_t previousPositions_[kChannelCount] = {-1, -1, -1, -1};

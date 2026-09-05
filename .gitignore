@@ -29,3 +29,8 @@ firmware/production-gateway/simulator/.state/
 # Operating systems
 Thumbs.db
 .DS_Store
+
+# Device backups can contain credentials. Never publish them.
+output/device-backup/
+output/validation/
+firmware/production-gateway/output/*.log

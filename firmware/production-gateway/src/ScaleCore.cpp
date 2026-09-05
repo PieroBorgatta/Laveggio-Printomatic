@@ -58,6 +58,12 @@ WeightSnapshot StabilityTracker::update(
   uint32_t nowMs
 ) {
   uint8_t decoded[kChannelCount] = {0, 0, 0, 0};
+  if (hasUpdate_ && nowMs - lastUpdateMs_ > 100) {
+    candidateValid_ = false;
+    snapshot_.stable = false;
+  }
+  lastUpdateMs_ = nowMs;
+  hasUpdate_ = true;
   bool allValid = true;
   uint32_t weightKg = 0;
 

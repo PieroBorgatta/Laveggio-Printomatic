@@ -5,6 +5,8 @@
 #include "ScaleCore.h"
 
 struct DisplayStatus {
+  const char *deliveryLabel = "";
+  bool storageError = false;
   const char *firmwareVersion = "";
   const char *ssid = "";
   const char *ipAddress = "";
@@ -45,6 +47,7 @@ class DisplayDriver {
  public:
   void begin();
   void setEnabled(bool enabled);
+  void configureBrightness(uint8_t percent, uint16_t dimSeconds);
   bool enabled() const { return enabled_; }
   bool touchAvailable() const { return touchController_ != 0; }
   const char *touchControllerName() const {
@@ -79,6 +82,10 @@ class DisplayDriver {
   uint32_t lastResetProgressMs_ = 0;
   uint32_t lastWeightKg_ = UINT32_MAX;
   bool lastValid_ = false;
+  bool lastStable_ = false;
+  uint8_t brightness_ = 65;
+  uint16_t dimSeconds_ = 120;
+  uint32_t lastInteractionMs_ = 0;
   uint8_t scrollRow_ = 0;
   uint8_t touchController_ = 0;
   bool touchPressed_ = false;

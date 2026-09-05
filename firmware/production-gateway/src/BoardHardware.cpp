@@ -1,4 +1,5 @@
 #include "BoardHardware.h"
+#include "ReliabilityCore.h"
 
 #include <Wire.h>
 #include <algorithm>
@@ -80,7 +81,7 @@ void BoardHardware::initializeImu() {
   writeRegister(kQmi8658Address, kQmiCtrl2, 0x16);
   writeRegister(kQmi8658Address, kQmiCtrl3, 0x26);
   writeRegister(kQmi8658Address, kQmiCtrl5, 0x11);
-  writeRegister(kQmi8658Address, kQmiCtrl7, 0x43);
+  writeRegister(kQmi8658Address, kQmiCtrl7, 0x41); // Accelerometer only; unused gyro stays off.
 }
 
 void BoardHardware::readBattery() {
@@ -132,8 +133,9 @@ void BoardHardware::readRtc() {
   const int hour = bcdToDecimal(raw[2] & 0x3F);
   const int minute = bcdToDecimal(raw[1] & 0x7F);
   const int second = bcdToDecimal(raw[0] & 0x7F);
-  status_.rtcClockValid = year >= 2024 && month >= 1 && month <= 12 &&
-    day >= 1 && day <= 31 && hour <= 23 && minute <= 59 && second <= 59;
+  uint8_t control=0;
+  status_.rtcEpoch=readRegister(kPcf85063Address,0,&control,1)?laveggio::rtcUtcEpoch(raw,control):0;
+  status_.rtcClockValid=status_.rtcEpoch!=0;
   snprintf(
     status_.rtcDateTime,
     sizeof(status_.rtcDateTime),
@@ -148,8 +150,10 @@ void BoardHardware::readRtc() {
 
 void BoardHardware::synchronizeRtc(time_t epoch) {
   if (epoch < 1700000000) return;
+  uint8_t control=0;
+  if(!readRegister(kPcf85063Address,0,&control,1) || !writeRegister(kPcf85063Address,0,control & ~0x20)) return;
   struct tm local{};
-  localtime_r(&epoch, &local);
+  gmtime_r(&epoch, &local);
   uint8_t raw[7] = {
     decimalToBcd(local.tm_sec), decimalToBcd(local.tm_min), decimalToBcd(local.tm_hour),
     decimalToBcd(local.tm_mday), decimalToBcd(local.tm_wday),
@@ -158,14 +162,19 @@ void BoardHardware::synchronizeRtc(time_t epoch) {
   Wire.beginTransmission(kPcf85063Address);
   Wire.write(kRtcSeconds);
   Wire.write(raw, sizeof(raw));
-  status_.rtcAvailable = Wire.endTransmission(true) == 0;
+  const bool written=Wire.endTransmission(true)==0;
   readRtc();
+  status_.rtcUtcWritten=written&&status_.rtcClockValid;
 }
 
 void BoardHardware::poll(uint32_t nowMs) {
   if (nowMs - lastPollMs_ < kPollIntervalMs) return;
   lastPollMs_ = nowMs;
   readBattery();
-  readImu();
   readRtc();
+}
+
+bool BoardHardware::pollMotion(uint32_t nowMs, bool enabled) {
+  if(nowMs-lastMotionMs_ < (enabled?20U:1000U)) return false;
+  lastMotionMs_=nowMs; readImu(); return status_.imuAvailable;
 }

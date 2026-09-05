@@ -57,7 +57,7 @@
               <input type="checkbox" id="display-toggle"><span class="switch"></span>
             </label>
             <label class="switch-row" for="speaker-toggle">
-              <span><strong>Conferma sonora</strong><small>Doppio tono quando la pesata è confermata</small></span>
+              <span><strong>Conferma sonora</strong><small>Doppio tono dopo il salvataggio della lettura su microSD</small></span>
               <input type="checkbox" id="speaker-toggle"><span class="switch"></span>
             </label>
           </div>
@@ -71,20 +71,20 @@
         </div>
 
         <div class="section-heading"><div><p class="eyebrow">Acquisizione</p><h2>Sensori AS5600</h2></div><span id="scan-rate">-- scansioni/s</span></div>
-        <div class="sensor-grid" id="sensor-grid"></div>
+        <div class="sensor-grid" id="sensor-grid"></div><div id="delivery-status" class="reset-procedure" role="status"></div>
       </section>
 
       <section class="view" id="view-calibration">
         <div class="section-heading"><div><p class="eyebrow">Taratura guidata</p><h2>Posizioni delle manopole</h2></div><span class="state-pill neutral" id="calibration-summary">0/40 punti</span></div>
         <div class="calibration-layout">
-          <div class="panel sensor-selector" id="calibration-channels"></div>
+          <div><div class="panel sensor-selector" id="calibration-channels"></div><form id="sensor-order-form" class="panel form-panel"><h3>Ordine delle cifre</h3><p>I punti di calibrazione restano sul canale fisico.</p><div id="sensor-order-fields"></div><button class="button secondary" type="submit">Salva ordine</button><small id="calibration-revision"></small></form></div>
           <div class="panel calibration-workspace">
             <div class="calibration-live">
               <div><span>Canale selezionato</span><strong id="cal-channel-name">Sensore 1</strong></div>
               <div><span>Valore corrente</span><strong id="cal-live-raw">----</strong></div>
               <div><span>Qualità magnete</span><strong id="cal-live-quality">--</strong></div>
             </div>
-            <div class="position-grid" id="position-grid"></div>
+            <p id="calibration-health" role="status"></p><div class="position-grid" id="position-grid"></div>
             <form id="calibration-form" class="compact-form">
               <label><span>Moltiplicatore kg</span><input name="multiplier" type="number" min="1" max="100000" required></label>
               <label><span>Tolleranza</span><input name="tolerance" type="number" min="10" max="1024" required></label>
@@ -178,7 +178,7 @@
             <label><span>Utente amministratore</span><input name="admin_user" autocomplete="username" required></label>
             <label><span>Nuova password</span><input name="admin_password" type="password" autocomplete="new-password" minlength="8" placeholder="Lascia vuoto per non modificarla"></label>
             <label class="check-row"><input name="display_default_on" type="checkbox"><span><strong>Display acceso dopo il riavvio</strong><small>Disattivare per mantenerlo spento dopo l'avvio</small></span></label>
-            <label class="check-row"><input name="speaker_default_on" type="checkbox"><span><strong>Speaker attivo dopo il riavvio</strong><small>Conferma acustica delle nuove pesate stabili</small></span></label>
+            <label class="check-row"><input name="speaker_default_on" type="checkbox"><span><strong>Speaker attivo dopo il riavvio</strong><small>Conferma acustica del salvataggio su microSD; tono distinto per gli errori</small></span></label>
             <label class="check-row"><input name="power_sense_enabled" type="checkbox"><span><strong>Rilevamento rete elettrica opzionale</strong><small>Richiede un segnale esterno protetto su GPIO15</small></span></label>
             <div class="form-section"><p class="eyebrow">Archivio MicroSD</p></div>
             <label class="check-row"><input name="history_enabled" type="checkbox"><span><strong>Memorizza le pesate</strong><small>File NDJSON settimanali in cartelle anno e mese</small></span></label>
@@ -199,7 +199,7 @@
             <button class="button primary" type="submit">Salva sistema</button>
           </form>
 
-          <div class="panel form-panel">
+<form class="panel form-panel" id="reliability-form"><div class="panel-heading"><div><p class="eyebrow">Uso quotidiano</p><h2>Display e alimentazione</h2></div></div><label><span>Luminosità (%)</span><input name="display_brightness" type="number" min="5" max="100" step="1" required></label><label><span>Attenua dopo inattività (secondi; 0 = mai)</span><input name="display_dim_seconds" type="number" min="0" max="3600" step="1" required></label><label><span>Avviso batteria bassa (%)</span><input name="battery_low_percent" type="number" min="5" max="50" step="1" required></label><label class="check-row"><input name="shutdown_button_enabled" type="checkbox"><span><strong>Spegnimento con tasto batteria</strong><small>Pressione di 2 secondi. Con USB collegata la scheda può restare alimentata.</small></span></label><hr><div class="panel-heading"><div><p class="eyebrow">Sperimentale</p><h2>Chiusura della bascula</h2></div></div><span class="state-pill warning">Sperimentale · Da collaudare</span><p>Un colpo seguito da quiete e da una lettura stabile. Un altro urto può produrre lo stesso segnale: iniziare in sola osservazione e confrontare con chiusure reali.</p><label class="check-row"><input name="closure_enabled" type="checkbox"><span><strong>Abilita rilevazione sperimentale</strong></span></label><label class="check-row"><input name="closure_complete_weight" type="checkbox"><span><strong>Segnala “peso completato”</strong><small>Disattivato: sola osservazione. Le letture ordinarie sono sempre inviate; la conferma operatore nel gestionale rimane separata.</small></span></label><div class="ip-grid"><label><span>Soglia colpo (g)</span><input name="closure_threshold_g" type="number" min="0.05" max="4" step="0.01" required></label><label><span>Soglia quiete (g)</span><input name="closure_quiet_g" type="number" min="0.01" max="3.99" step="0.01" required></label><label><span>Quiete minima (ms)</span><input name="closure_quiet_ms" type="number" min="100" max="5000" step="1" required></label><label><span>Tempo massimo (ms)</span><input name="closure_timeout_ms" type="number" min="200" max="15000" step="1" required></label><label><span>Pausa fra rilevazioni (ms)</span><input name="closure_cooldown_ms" type="number" min="500" max="30000" step="1" required></label></div><div id="closure-live" class="reset-procedure" aria-live="polite"></div><button class="button primary" type="submit">Salva display, batteria e bascula</button></form>          <div class="panel form-panel">
             <div class="panel-heading"><div><p class="eyebrow">Manutenzione</p><h2>Firmware e diagnostica</h2></div></div>
             <dl class="details" id="system-details"></dl>
             <form id="ota-form" class="upload-box"><label><span>Firmware firmato</span><input name="firmware" type="file" accept=".signed.bin" required><small>Seleziona il file CaskLogic .signed.bin. Il dispositivo verifica la firma, installa l'aggiornamento e si riavvia automaticamente.</small></label><button class="button secondary" id="ota-submit" type="submit">Installa aggiornamento</button><div class="ota-progress" id="ota-progress" aria-live="polite" hidden><div><strong id="ota-status">Pronto</strong><span id="ota-percent">0%</span></div><progress id="ota-progress-bar" max="100" value="0"></progress><small id="ota-detail">Nessun aggiornamento in corso</small></div></form>

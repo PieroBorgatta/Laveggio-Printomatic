@@ -20,7 +20,12 @@
 #include <mbedtls/base64.h>
 #include <mbedtls/md.h>
 #include <time.h>
+#include <sys/time.h>
+#include <esp_sntp.h>
+#include "Acquisition.h"
+#include "DeliveryPipeline.h"
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 #include "DeviceConfig.h"
@@ -41,7 +46,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.0.0";
+constexpr char kFirmwareVersion[] = "2.1.0";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -114,13 +119,26 @@ struct SdHealthState {
 ConfigStore configStore;
 DisplayDriver display;
 BoardHardware boardHardware;
+Acquisition acquisition;
+AcquisitionState acquisitionState;
+DeliveryPipeline delivery;
+DeliveryState deliveryState;
+bool runtimeReady=false;
+bool rtcStoredUtc=false;
+std::atomic_bool ntpUpdatePending{false};
+const char *timeSource="unavailable";
+uint32_t lastNtpRtcWrite=0;
+uint32_t lastUiScanCount=0;
+uint32_t batteryButtonSince=0;
+bool batteryButtonReleased=false;
+bool shutdownRequested=false;
+void refreshRuntimeConfiguration();
 SpeakerDriver speaker;
 WebServer webServer(80);
 DNSServer dnsServer;
 WiFiClientSecure mqttTlsClient;
 PubSubClient mqttClient(mqttTlsClient);
 laveggio::SensorReading sensorReadings[laveggio::kChannelCount];
-laveggio::StabilityTracker stabilityTracker;
 laveggio::WeightSnapshot currentSnapshot;
 QueueHandle_t outboundQueue = nullptr;
 SensorErrorCounters sensorErrors[laveggio::kChannelCount];
@@ -242,22 +260,22 @@ String timestampIso(time_t epoch) {
 void requestTimeSynchronization() {
   if (WiFi.status() != WL_CONNECTED) return;
   const DeviceConfig &config = configStore.get();
+  sntp_set_time_sync_notification_cb([](struct timeval *) { ntpUpdatePending=true; });
   configTzTime(config.timezone.c_str(), config.ntpServer.c_str());
   lastTimeSyncAttemptMs = millis();
 }
 
 void pollTimeSynchronization(uint32_t now) {
-  const bool valid = time(nullptr) >= 1700000000;
-  if (valid && !timeSynchronized) {
-    timeSynchronized = true;
-    lastTimeSyncAt = timestampIso();
-    boardHardware.synchronizeRtc(time(nullptr));
-    logSystem("info", "time_synchronized", lastTimeSyncAt);
+  if (ntpUpdatePending.exchange(false)) {
+    timeSynchronized=true; timeSource="ntp"; acquisition.setTimeSource(2);
+    lastTimeSyncAt=timestampIso();
+    acquisition.syncRtc(time(nullptr));
+    logSystem("info","time_synchronized",lastTimeSyncAt);
   }
-  if (!valid && WiFi.status() == WL_CONNECTED &&
-      now - lastTimeSyncAttemptMs >= kTimeSyncRetryIntervalMs) {
-    requestTimeSynchronization();
+  if(!rtcStoredUtc && acquisitionState.board.rtcUtcWritten) {
+    Preferences metadata; if(metadata.begin("pesalink_rtc",false)) { rtcStoredUtc=metadata.putBool("utc",true)>0; metadata.end(); }
   }
+  if (!timeSynchronized && WiFi.status()==WL_CONNECTED && now-lastTimeSyncAttemptMs>=kTimeSyncRetryIntervalMs) requestTimeSynchronization();
 }
 
 String hmacSha256Hex(const String &secret, const String &payload) {
@@ -281,16 +299,8 @@ String hmacSha256Hex(const String &secret, const String &payload) {
 }
 
 uint8_t estimatedBatteryPercent() {
-  const DeviceConfig &config = configStore.get();
-  if (!config.batterySenseEnabled || batteryVoltageMv == 0 || config.batteryMaxMv <= config.batteryMinMv) return 0;
-  const long percent = map(
-    constrain(batteryVoltageMv, config.batteryMinMv, config.batteryMaxMv),
-    config.batteryMinMv,
-    config.batteryMaxMv,
-    0,
-    100
-  );
-  return static_cast<uint8_t>(constrain(percent, 0L, 100L));
+  const auto &c=configStore.get();
+  return c.batterySenseEnabled ? laveggio::estimateBatteryPercent(batteryVoltageMv,c.batteryMinMv,c.batteryMaxMv) : 0;
 }
 
 String resetReasonLabel() {
@@ -329,9 +339,10 @@ bool ensureDirectoryTree(const String &path) {
   return true;
 }
 
-String weeklyLogPath(const char *root, const char *prefix) {
+String weeklyLogPath(const char *root, const char *prefix, time_t capturedEpoch = -1) {
   struct tm timeInfo;
-  if (!getLocalTime(&timeInfo, 10)) {
+  const bool valid=capturedEpoch == -1 ? getLocalTime(&timeInfo,10) : (capturedEpoch>=1700000000 && localtime_r(&capturedEpoch,&timeInfo)!=nullptr);
+  if (!valid) {
     const String directory = String(root) + "/unsynced";
     ensureDirectoryTree(directory);
     return directory + "/" + prefix + "-" + bootId + ".ndjson";
@@ -411,15 +422,15 @@ std::vector<String> listNdjsonFiles(const char *directory, const char *prefix) {
   return paths;
 }
 
-void appendLine(const String &path, const String &line, uint32_t maxBytes) {
-  if (!sdReady) return;
-  digitalWrite(14, HIGH);
+bool appendLine(const String &path, const String &line, uint32_t maxBytes) {
+  if (!sdReady) return false;
   rotateLogIfNeeded(path, maxBytes);
   File file = SD.open(path, FILE_APPEND);
-  if (!file) return;
-  file.println(line);
+  if (!file) return false;
+  const bool ok=file.println(line)==line.length()+2;
   file.flush();
   file.close();
+  return ok;
 }
 
 void logSystem(const String &level, const String &event, const String &detail = "") {
@@ -638,121 +649,6 @@ void pruneExpiredArchives() {
     if (modified > 1700000000 && modified < cutoff && SD.remove(path)) ++removed;
   }
   if (removed) logSystem("info", "history_retention_pruned", "files=" + String(removed));
-}
-
-bool i2cProbe(uint8_t address) {
-  Wire.beginTransmission(address);
-  return Wire.endTransmission() == 0;
-}
-
-void discoverMux() {
-  muxAddress = -1;
-  for (uint8_t address = 0x70; address <= 0x77; ++address) {
-    if (i2cProbe(address)) {
-      muxAddress = address;
-      return;
-    }
-  }
-}
-
-bool selectMuxChannel(uint8_t channel) {
-  if (muxAddress < 0 || channel >= laveggio::kChannelCount) return false;
-  Wire.beginTransmission(static_cast<uint8_t>(muxAddress));
-  Wire.write(1U << channel);
-  return Wire.endTransmission() == 0;
-}
-
-bool readAs5600(uint8_t reg, uint8_t *buffer, size_t length) {
-  Wire.beginTransmission(kAs5600Address);
-  Wire.write(reg);
-  if (Wire.endTransmission(false) != 0) return false;
-  if (Wire.requestFrom(kAs5600Address, length) != length) return false;
-  for (size_t index = 0; index < length; ++index) buffer[index] = Wire.read();
-  return true;
-}
-
-void scanSensors() {
-  const uint32_t now = millis();
-  const bool healthDue = now - lastHealthReadMs >= kHealthIntervalMs;
-  if (muxAddress < 0) discoverMux();
-
-  for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
-    if (!selectMuxChannel(channel)) {
-      sensorReadings[channel].present = false;
-      ++sensorErrors[channel].readFailures;
-      if (healthDue) {
-        ++sensorErrors[channel].missingSamples;
-        sensorErrors[channel].lastErrorAt = timestampIso();
-        if (sensorErrors[channel].stateInitialized && sensorErrors[channel].previouslyHealthy) {
-          ++sensorErrors[channel].unhealthyTransitions;
-        }
-        sensorErrors[channel].stateInitialized = true;
-        sensorErrors[channel].previouslyHealthy = false;
-      }
-      continue;
-    }
-    delayMicroseconds(450);
-    if (!i2cProbe(kAs5600Address)) {
-      sensorReadings[channel].present = false;
-      ++sensorErrors[channel].readFailures;
-      if (healthDue) {
-        ++sensorErrors[channel].missingSamples;
-        sensorErrors[channel].lastErrorAt = timestampIso();
-        if (sensorErrors[channel].stateInitialized && sensorErrors[channel].previouslyHealthy) {
-          ++sensorErrors[channel].unhealthyTransitions;
-        }
-        sensorErrors[channel].stateInitialized = true;
-        sensorErrors[channel].previouslyHealthy = false;
-      }
-      continue;
-    }
-    uint8_t angle[2] = {0, 0};
-    if (!readAs5600(0x0C, angle, 2)) {
-      sensorReadings[channel].present = false;
-      ++sensorErrors[channel].readFailures;
-      if (healthDue) {
-        ++sensorErrors[channel].missingSamples;
-        sensorErrors[channel].lastErrorAt = timestampIso();
-        if (sensorErrors[channel].stateInitialized && sensorErrors[channel].previouslyHealthy) {
-          ++sensorErrors[channel].unhealthyTransitions;
-        }
-        sensorErrors[channel].stateInitialized = true;
-        sensorErrors[channel].previouslyHealthy = false;
-      }
-      continue;
-    }
-    laveggio::SensorReading &reading = sensorReadings[channel];
-    reading.present = true;
-    reading.raw = ((static_cast<uint16_t>(angle[0]) << 8) | angle[1]) & 0x0FFF;
-    if (healthDue) {
-      uint8_t status = reading.status;
-      uint8_t agc = reading.agc;
-      uint8_t magnitude[2] = {0, 0};
-      if (readAs5600(0x0B, &status, 1)) reading.status = status;
-      if (readAs5600(0x1A, &agc, 1)) reading.agc = agc;
-      if (readAs5600(0x1B, magnitude, 2)) {
-        reading.magnitude =
-          ((static_cast<uint16_t>(magnitude[0]) << 8) | magnitude[1]) & 0x0FFF;
-      }
-      const bool healthy = reading.healthy();
-      SensorErrorCounters &errors = sensorErrors[channel];
-      if (reading.magnetWeak()) ++errors.weakMagnetSamples;
-      if (reading.magnetStrong()) ++errors.strongMagnetSamples;
-      if (!healthy) errors.lastErrorAt = timestampIso();
-      if (errors.stateInitialized && errors.previouslyHealthy && !healthy) {
-        ++errors.unhealthyTransitions;
-      }
-      errors.stateInitialized = true;
-      errors.previouslyHealthy = healthy;
-    }
-  }
-  if (healthDue) lastHealthReadMs = now;
-  if (muxAddress >= 0) {
-    Wire.beginTransmission(static_cast<uint8_t>(muxAddress));
-    Wire.write(0);
-    Wire.endTransmission();
-  }
-  ++scanCounter;
 }
 
 String buildSnapshotJson(const char *eventType, bool includeDelivery) {
@@ -990,7 +886,7 @@ void maintainMqtt(uint32_t now) {
 }
 
 bool syncRemoteConfiguration() {
-  DeviceConfig &config = configStore.mutableConfig();
+  DeviceConfig config = configStore.get();
   configSyncAttemptedThisBoot = true;
   lastConfigSyncMs = millis();
   lastConfigSyncError = "";
@@ -1076,39 +972,18 @@ bool syncRemoteConfiguration() {
       if (point["enabled"].is<bool>()) calibration.points[position].enabled = point["enabled"].as<bool>();
       if (point["raw"].is<uint16_t>()) calibration.points[position].raw = constrain(point["raw"].as<uint16_t>(), 0, 4095);
     }
-    configStore.saveCalibration(channel);
+    if(!laveggio::calibrationSeparated(calibration)) { lastConfigSyncError="Posizioni della calibrazione remota sovrapposte"; return false; }
   }
   config.remoteConfigVersion = version;
+  const auto previous=configStore.get();
+  configStore.mutableConfig()=config;
+  if(calibrations.size() && !configStore.saveCalibration(0)) { configStore.mutableConfig()=previous; lastConfigSyncError="Salvataggio calibrazione non riuscito"; return false; }
   configStore.saveSettings();
-  stabilityTracker.setStableWindow(config.stableWindowMs);
+    refreshRuntimeConfiguration();
   configSyncLastOk = true;
   lastConfigSyncAt = timestampIso();
   logSystem("info", "config_sync_applied", "version=" + String(version));
   return true;
-}
-
-void recordWeightEvent() {
-  ++sequenceNumber;
-  const DeviceConfig &config = configStore.get();
-  const String outboundRecord = buildSnapshotJson("scale.snapshot", false);
-  String record = outboundRecord;
-  if (record.endsWith("}")) {
-    record.remove(record.length() - 1);
-    const String delivery = config.backendUrl.isEmpty() && !config.mqttEnabled ? "local" : "requested";
-    record += ",\"delivery\":" + quoted(delivery) + "}";
-  }
-  if (config.historyEnabled) {
-    appendLine(
-      weeklyLogPath("/weights", "history"),
-      record,
-      config.historyFileMaxMb * 1024UL * 1024UL
-    );
-  }
-  queueOutbound(config.backendUrl, config.backendToken, outboundRecord);
-  if (config.mqttEnabled && mqttClient.connected()) {
-    mqttClient.publish(mqttTopic("weights").c_str(), outboundRecord.c_str(), false);
-  }
-  speaker.confirmWeight();
 }
 
 void sendHeartbeat() {
@@ -1442,7 +1317,53 @@ void sendError(int status, const String &message) {
   sendJson("{\"error\":" + quoted(message) + "}", status);
 }
 
+String reliabilityStatusJson() {
+  JsonDocument doc;
+  doc["time_source"]=timeSource;
+  doc["calibration_revision"]=configStore.get().calibrationRevision;
+  doc["calibration_checksum_valid"]=configStore.get().calibrationChecksumValid;
+  doc["max_sample_gap_ms"]=acquisitionState.maxGapMs;
+  doc["sample_overruns"]=acquisitionState.overruns;
+  doc["acquisition_queue_drops"]=acquisitionState.droppedEvents;
+  doc["delivery_queue_drops"]=deliveryState.queueDrops;
+  doc["max_dispatch_ms"]=deliveryState.maxDispatchMs;
+  doc["capture_age_ms"]=millis()-acquisitionState.capturedMs;
+  doc["dispatched"]=deliveryState.dispatched;
+  doc["http_failures"]=deliveryState.httpFailures;
+  doc["mqtt_failures"]=deliveryState.mqttFailures;
+  doc["storage_failures"]=deliveryState.storageFailures;
+  doc["event_id"]=deliveryState.eventId;
+  doc["saved"]=deliveryState.saved;
+  doc["storage_attempted"]=deliveryState.storageAttempted;
+  doc["history_enabled"]=deliveryState.historyEnabled;
+  doc["http_ack"]=deliveryState.httpAck;
+  doc["mqtt_published"]=deliveryState.mqttPublished;
+  doc["battery_low"]=batteryVoltageMv>0&&estimatedBatteryPercent()<=configStore.get().batteryLowPercent;
+  doc["closure"]["experimental"]=true;
+  doc["closure"]["enabled"]=configStore.get().closure.enabled;
+  doc["closure"]["complete_weight"]=configStore.get().closure.completeWeight;
+  doc["closure"]["vibration_g"]=acquisitionState.vibrationG;
+  doc["closure"]["peak_g"]=acquisitionState.closurePeakG;
+  doc["closure"]["count"]=acquisitionState.closureCount;
+  doc["closure"]["last_detected_ms"]=acquisitionState.closureAtMs;
+  doc["closure"]["pending"]=acquisitionState.closurePending;
+  String json; serializeJson(doc,json); return json;
+}
+
+String reliabilitySettingsJson() {
+  const auto &c=configStore.get(); JsonDocument doc;
+  doc["display_brightness"]=c.displayBrightness; doc["display_dim_seconds"]=c.displayDimSeconds;
+  doc["battery_low_percent"]=c.batteryLowPercent; doc["shutdown_button_enabled"]=c.shutdownButtonEnabled;
+  doc["closure_enabled"]=c.closure.enabled; doc["closure_complete_weight"]=c.closure.completeWeight;
+  doc["closure_threshold_g"]=c.closure.thresholdG; doc["closure_quiet_g"]=c.closure.quietG;
+  doc["closure_quiet_ms"]=c.closure.quietMs; doc["closure_timeout_ms"]=c.closure.timeoutMs; doc["closure_cooldown_ms"]=c.closure.cooldownMs;
+  String json; serializeJson(doc,json); return json;
+}
+
 String buildStatusJson() {
+  acquisitionState=acquisition.snapshot(); memcpy(sensorReadings,acquisitionState.sensors,sizeof(sensorReadings));
+  currentSnapshot=acquisitionState.weight; deliveryState=delivery.status();
+  if(millis()-acquisitionState.capturedMs>100) { currentSnapshot.valid=false; currentSnapshot.stable=false; }
   const DeviceConfig &config = configStore.get();
   String json;
   json.reserve(2600);
@@ -1497,14 +1418,14 @@ String buildStatusJson() {
   json += ",\"power\":{\"external\":" + boolJson(externalPowerPresent);
   json += ",\"source_label\":" + quoted(powerLabel);
   json += ",\"battery_configured\":" + boolJson(config.batterySenseEnabled);
-  json += ",\"battery_present\":" + boolJson(boardHardware.status().batteryAvailable);
+  json += ",\"battery_present\":" + boolJson(acquisitionState.board.batteryAvailable);
   json += ",\"battery_voltage_mv\":" + String(batteryVoltageMv);
   json += ",\"battery_percent\":" + String(estimatedBatteryPercent());
   json += ",\"battery_capacity_mah\":" + String(config.batteryCapacityMah);
   json += ",\"current_sensor_configured\":false";
   json += ",\"current_ma\":null";
   json += ",\"chip_temperature_c\":" + String(temperatureRead(), 1) + "}";
-  const BoardHardwareStatus &board = boardHardware.status();
+  const BoardHardwareStatus &board = acquisitionState.board;
   json += ",\"board\":{\"model\":\"Waveshare ESP32-S3-Touch-LCD-2.8\"";
 #ifdef TOUCH_CST328_PREFERRED
   json += ",\"revision_profile\":\"V1\"";
@@ -1552,6 +1473,11 @@ String buildStatusJson() {
     json += ",\"status\":" + String(reading.status);
     json += ",\"agc\":" + String(reading.agc);
     json += ",\"magnitude\":" + String(reading.magnitude);
+    json += ",\"noise_raw\":" + String(acquisitionState.noise[channel]);
+    json += ",\"sample_count\":" + String(acquisitionState.samples[channel]);
+    json += ",\"margin_raw\":" + String(int(config.calibrations[channel].tolerance)-int(decoded.distance));
+    const auto &reference=config.calibrations[channel].points[decoded.position];
+    json += ",\"magnitude_drift\":" + String(reference.magnitude?int(reading.magnitude)-int(reference.magnitude):0);
     json += ",\"position\":" + (decoded.valid ? String(decoded.position) : "null");
     json += ",\"magnet_weak\":" + boolJson(reading.magnetWeak());
     json += ",\"magnet_strong\":" + boolJson(reading.magnetStrong());
@@ -1562,7 +1488,7 @@ String buildStatusJson() {
     json += ",\"unhealthy_transitions\":" + String(sensorErrors[channel].unhealthyTransitions);
     json += ",\"last_error_at\":" + quoted(sensorErrors[channel].lastErrorAt) + "}";
   }
-  json += "]}";
+  json += "],\"reliability\":" + reliabilityStatusJson() + "}";
   return json;
 }
 
@@ -1622,7 +1548,9 @@ String buildSettingsJson() {
 
 String buildCalibrationJson() {
   const DeviceConfig &config = configStore.get();
-  String json = "{\"channels\":[";
+  String json = "{\"revision\":"+String(config.calibrationRevision)+",\"sensor_order\":[";
+  for(uint8_t i=0;i<4;++i) { if(i) json+=','; json+=String(config.sensorOrder[i]); }
+  json+="],\"channels\":[";
   json.reserve(1800);
   for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
     if (channel) json += ',';
@@ -1631,6 +1559,7 @@ String buildCalibrationJson() {
     json += ",\"multiplier_kg\":" + String(calibration.multiplierKg);
     json += ",\"tolerance\":" + String(calibration.tolerance);
     json += ",\"hysteresis\":" + String(calibration.hysteresis);
+    json += ",\"separated\":"+boolJson(laveggio::calibrationSeparated(calibration));
     json += ",\"points\":[";
     for (uint8_t position = 0; position < laveggio::kPositionCount; ++position) {
       if (position) json += ',';
@@ -1780,7 +1709,7 @@ String buildDiagnosticsJson(bool active) {
     "battery", "Batteria", !config.batterySenseEnabled ? "na" : (batteryAvailable ? "pass" : "warn"),
     !config.batterySenseEnabled ? "Monitoraggio non configurato" : String(batteryVoltageMv) + " mV"
   );
-  const BoardHardwareStatus &board = boardHardware.status();
+  const BoardHardwareStatus &board = acquisitionState.board;
   tests[7] = diagnosticTestJson(
     "touch", "Touch capacitivo", display.touchAvailable() ? "pass" : "fail",
     display.touchAvailable() ? String(display.touchControllerName()) + " operativo" : "Controller non rilevato"
@@ -2336,6 +2265,51 @@ void registerWebRoutes() {
     sendJson("{\"ok\":true,\"ready\":" + boolJson(speaker.ready()) + "}");
   });
 
+  webServer.on("/api/settings/reliability",HTTP_GET,[] {
+    if(!authorized()) return; sendJson(reliabilitySettingsJson());
+  });
+  webServer.on("/api/settings/reliability",HTTP_POST,[] {
+    if(!authorized()) return;
+    const char *required[]={"display_brightness","display_dim_seconds","battery_low_percent","shutdown_button_enabled","closure_enabled","closure_complete_weight","closure_threshold_g","closure_quiet_g","closure_quiet_ms","closure_timeout_ms","closure_cooldown_ms"};
+    for(const char *key:required) if(!webServer.hasArg(key)) { sendError(400,"Impostazioni incomplete"); return; }
+    auto c=configStore.get();
+    c.displayBrightness=constrain(webServer.arg("display_brightness").toInt(),5,100);
+    c.displayDimSeconds=constrain(webServer.arg("display_dim_seconds").toInt(),0,3600);
+    c.batteryLowPercent=constrain(webServer.arg("battery_low_percent").toInt(),5,50);
+    c.shutdownButtonEnabled=parseBool(webServer.arg("shutdown_button_enabled"));
+    c.closure.enabled=parseBool(webServer.arg("closure_enabled"));
+    c.closure.completeWeight=parseBool(webServer.arg("closure_complete_weight"));
+    c.closure.thresholdG=webServer.arg("closure_threshold_g").toFloat();
+    c.closure.quietG=webServer.arg("closure_quiet_g").toFloat();
+    c.closure.quietMs=webServer.arg("closure_quiet_ms").toInt();
+    c.closure.timeoutMs=webServer.arg("closure_timeout_ms").toInt();
+    c.closure.cooldownMs=webServer.arg("closure_cooldown_ms").toInt();
+    if(!std::isfinite(c.closure.thresholdG)||!std::isfinite(c.closure.quietG)||c.closure.thresholdG<0.05f||c.closure.thresholdG>4||c.closure.quietG<0.01f||c.closure.quietG>=c.closure.thresholdG||c.closure.quietMs<100||c.closure.quietMs>5000||c.closure.timeoutMs<=c.closure.quietMs||c.closure.timeoutMs>15000||c.closure.cooldownMs<500||c.closure.cooldownMs>30000) {
+      sendError(400,"Soglie incoerenti: quiete inferiore al colpo; tempo massimo superiore alla quiete"); return;
+    }
+    const auto previous=configStore.get();
+    configStore.mutableConfig()=c;
+    if(!configStore.saveReliabilitySettings()) { configStore.mutableConfig()=previous; sendError(500,"Impostazioni non salvate"); return; }
+    refreshRuntimeConfiguration();
+    logSystem("info","reliability_settings_saved"); sendJson("{\"ok\":true}");
+  });
+  webServer.on("/api/calibration/order",HTTP_POST,[] {
+    if(!authorized()) return;
+    uint8_t order[4];
+    for(uint8_t i=0;i<4;++i) { const String key=String("slot_")+i;
+      const String value=webServer.arg(key);
+      if(value.length()!=1||value[0]<'0'||value[0]>'3') { sendError(400,"Ordine non valido"); return; }
+      order[i]=value[0]-'0';
+    }
+    if(!laveggio::validSensorOrder(order)) { sendError(400,"Ogni sensore deve comparire una sola volta"); return; }
+    uint8_t previous[4]; memcpy(previous,configStore.get().sensorOrder,4);
+    memcpy(configStore.mutableConfig().sensorOrder,order,4);
+    if(!configStore.saveCalibration(0)) { memcpy(configStore.mutableConfig().sensorOrder,previous,4); sendError(500,"Salvataggio ordine non riuscito"); return; }
+    configStore.saveSettings(); refreshRuntimeConfiguration();
+    logSystem("info","sensor_order_saved","revision="+String(configStore.get().calibrationRevision));
+    sendJson("{\"ok\":true}");
+  });
+
   webServer.on("/api/calibration/capture", HTTP_POST, [] {
     if (!authorized()) return;
     const int channel = webServer.arg("channel").toInt();
@@ -2349,11 +2323,18 @@ void registerWebRoutes() {
       sendError(409, "Il sensore non ha un campo magnetico regolare");
       return;
     }
-    laveggio::CalibrationPoint &point =
-      configStore.mutableConfig().calibrations[channel].points[position];
-    point.enabled = true;
-    point.raw = sensorReadings[channel].raw;
-    configStore.saveCalibration(channel);
+    if(millis()-acquisitionState.capturedMs>100 || acquisitionState.samples[channel]<25 || acquisitionState.noise[channel]>12) {
+      sendError(409,"Attendere almeno mezzo secondo con il magnete fermo; rumore massimo 12 raw"); return;
+    }
+    const auto previous=configStore.get().calibrations[channel];
+    auto candidate=previous;
+    candidate.points[position].enabled=true; candidate.points[position].raw=sensorReadings[channel].raw;
+    if(!laveggio::calibrationSeparated(candidate)) { sendError(409,"Punto troppo vicino a un altro: verificare cifra, tolleranza e isteresi"); return; }
+    candidate.points[position].noise=acquisitionState.noise[channel]; candidate.points[position].magnitude=sensorReadings[channel].magnitude; candidate.points[position].agc=sensorReadings[channel].agc;
+    configStore.mutableConfig().calibrations[channel]=candidate;
+    const auto &point=candidate.points[position];
+    if(!configStore.saveCalibration(channel)) { configStore.mutableConfig().calibrations[channel]=previous; sendError(500,"Salvataggio calibrazione non riuscito"); return; }
+    refreshRuntimeConfiguration();
     logSystem("info", "calibration_point_saved", "channel=" + String(channel) + " position=" + position);
     sendJson("{\"ok\":true,\"raw\":" + String(point.raw) + "}");
   });
@@ -2365,11 +2346,15 @@ void registerWebRoutes() {
       sendError(400, "Canale non valido");
       return;
     }
-    laveggio::ChannelCalibration &calibration = configStore.mutableConfig().calibrations[channel];
+    const auto previous = configStore.get().calibrations[channel];
+    auto calibration = previous;
     calibration.multiplierKg = constrain(webServer.arg("multiplier").toInt(), 1, 100000);
     calibration.tolerance = constrain(webServer.arg("tolerance").toInt(), 10, 1024);
     calibration.hysteresis = constrain(webServer.arg("hysteresis").toInt(), 0, 512);
-    configStore.saveCalibration(channel);
+    if(!laveggio::calibrationSeparated(calibration)) { sendError(409,"Tolleranza e isteresi sovrappongono le posizioni calibrate"); return; }
+    configStore.mutableConfig().calibrations[channel]=calibration;
+    if(!configStore.saveCalibration(channel)) { configStore.mutableConfig().calibrations[channel]=previous; sendError(500,"Salvataggio calibrazione non riuscito"); return; }
+    refreshRuntimeConfiguration();
     sendJson("{\"ok\":true}");
   });
 
@@ -2380,7 +2365,8 @@ void registerWebRoutes() {
       sendError(400, "Canale non valido");
       return;
     }
-    configStore.clearCalibration(channel);
+    if(!configStore.clearCalibration(channel)) { sendError(500,"Azzeramento non salvato"); return; }
+    refreshRuntimeConfiguration();
     logSystem("warning", "calibration_channel_reset", String(channel));
     sendJson("{\"ok\":true}");
   });
@@ -2412,7 +2398,8 @@ void registerWebRoutes() {
     config.subnet = webServer.arg("subnet");
     config.dns = webServer.arg("dns");
     configStore.saveSettings();
-    timeSynchronized = false;
+    refreshRuntimeConfiguration();
+    setenv("TZ",config.timezone.c_str(),1); tzset();
     requestTimeSynchronization();
     logSystem("info", "network_settings_saved");
     sendJson("{\"ok\":true,\"restart_required\":true}");
@@ -2509,8 +2496,8 @@ void registerWebRoutes() {
     config.heartbeatFailureThreshold = constrain(webServer.arg("heartbeat_failure_threshold").toInt(), 3, 20);
     config.heartbeatRestartSuppressed = false;
     heartbeatConsecutiveFailures = 0;
-    stabilityTracker.setStableWindow(config.stableWindowMs);
-    configStore.saveSettings();
+      configStore.saveSettings();
+    refreshRuntimeConfiguration();
     if (mqttClient.connected()) mqttClient.disconnect();
     configSyncAttemptedThisBoot = false;
     logSystem("info", "integration_settings_saved");
@@ -2562,11 +2549,12 @@ void registerWebRoutes() {
     config.batteryMaxMv = batteryMaxMv;
     config.batteryCapacityMah = constrain(webServer.arg("battery_capacity_mah").toInt(), 100, 20000);
     configStore.saveSettings();
+    refreshRuntimeConfiguration();
     displayOn = config.displayDefaultOn;
     display.setEnabled(displayOn);
     speakerOn = config.speakerDefaultOn;
     speaker.setEnabled(speakerOn);
-    timeSynchronized = false;
+    setenv("TZ",config.timezone.c_str(),1); tzset();
     requestTimeSynchronization();
     pruneExpiredArchives();
     logSystem("info", "system_settings_saved");
@@ -2745,6 +2733,12 @@ void registerWebRoutes() {
   webServer.begin();
 }
 
+void refreshRuntimeConfiguration() {
+  if(!runtimeReady) return;
+  acquisition.configure(configStore.get()); delivery.configure(configStore.get(),bootId);
+  display.configureBrightness(configStore.get().displayBrightness,configStore.get().displayDimSeconds);
+}
+
 void initializeIdentity() {
   const uint64_t mac = ESP.getEfuseMac();
   char suffix[7];
@@ -2802,8 +2796,12 @@ void readBatteryStatus() {
     batteryVoltageMv = 0;
     return;
   }
-  const BoardHardwareStatus &board = boardHardware.status();
+  const BoardHardwareStatus &board = acquisitionState.board;
   batteryVoltageMv = board.batteryAvailable ? board.batteryVoltageMv : 0;
+  static bool wasLow=false;
+  const bool low=batteryVoltageMv>0 && estimatedBatteryPercent()<=config.batteryLowPercent;
+  if(low&&!wasLow) { speaker.alert(); logSystem("warning","battery_low",String(batteryVoltageMv)); }
+  if(low || estimatedBatteryPercent()>config.batteryLowPercent+5) wasLow=low;
 }
 
 }  // namespace
@@ -2824,7 +2822,6 @@ void setup() {
   );
   csrfToken = csrf;
   configStore.begin(deviceSuffix);
-  stabilityTracker.setStableWindow(configStore.get().stableWindowMs);
 
   pinMode(kMuxReset, OUTPUT);
   digitalWrite(kMuxReset, HIGH);
@@ -2837,14 +2834,24 @@ void setup() {
   Wire.begin(kI2cSda, kI2cScl, 100000);
   Wire.setTimeOut(20);
   boardHardware.begin();
-  discoverMux();
+  acquisitionState.board=boardHardware.status();
+  setenv("TZ",configStore.get().timezone.c_str(),1); tzset();
+  Preferences metadata;
+  if(metadata.begin("pesalink_rtc",true)) { rtcStoredUtc=metadata.getBool("utc",false); metadata.end(); }
+  if(rtcStoredUtc && acquisitionState.board.rtcClockValid) {
+    timeval value{acquisitionState.board.rtcEpoch,0}; settimeofday(&value,nullptr); timeSource="rtc"; acquisition.setTimeSource(1);
+  }
+
 
   display.begin();
   displayOn = configStore.get().displayDefaultOn;
   display.setEnabled(displayOn);
+  display.configureBrightness(configStore.get().displayBrightness,configStore.get().displayDimSeconds);
   speakerOn = configStore.get().speakerDefaultOn;
   speaker.begin();
   speaker.setEnabled(speakerOn);
+  runtimeReady=acquisition.begin(&boardHardware,configStore.get()) && delivery.begin(&acquisition,configStore.get(),bootId);
+  if(!runtimeReady) { Serial.println("FATAL: acquisition/delivery tasks unavailable"); delay(1000); ESP.restart(); }
   initializeStorage();
 
   Serial.printf("Rescue AP: %s\n", kRescueSsid);
@@ -2880,7 +2887,48 @@ void setup() {
 
 void loop() {
   const uint32_t now = millis();
-  boardHardware.poll(now);
+  acquisitionState=acquisition.snapshot();
+  memcpy(sensorReadings,acquisitionState.sensors,sizeof(sensorReadings));
+  currentSnapshot=acquisitionState.weight;
+  if(now-acquisitionState.capturedMs>100) { currentSnapshot.valid=false; currentSnapshot.stable=false; }
+  muxAddress=acquisitionState.muxAddress;
+  deliveryState=delivery.status();
+  for(uint8_t i=0;i<4;++i) {
+    sensorErrors[i].readFailures=acquisitionState.readFailures[i]; sensorErrors[i].missingSamples=acquisitionState.missingSamples[i];
+    sensorErrors[i].weakMagnetSamples=acquisitionState.weakSamples[i]; sensorErrors[i].strongMagnetSamples=acquisitionState.strongSamples[i];
+    sensorErrors[i].unhealthyTransitions=acquisitionState.unhealthyTransitions[i];
+  }
+  static DeliveryRecord stored;
+  for(uint8_t n=0;n<4 && delivery.takeStorage(stored);++n) {
+    const bool ok=appendLine(weeklyLogPath(stored.weight?"/weights":"/logs",stored.weight?"history":"events",stored.epoch),stored.body,configStore.get().historyFileMaxMb*1024UL*1024UL);
+    if(stored.id[0]) { delivery.storageResult(stored.id,ok); if(stored.weight) { if(ok) speaker.confirmWeight(); else speaker.alert(); } }
+  }
+  if(configStore.get().shutdownButtonEnabled) {
+    const bool pressed=digitalRead(kBatteryPowerKeyPin)==HIGH;
+    if(!pressed) { batteryButtonReleased=true; batteryButtonSince=0; }
+    else if(batteryButtonReleased && !batteryButtonSince) batteryButtonSince=now;
+    if(batteryButtonSince && now-batteryButtonSince>=2000 && !shutdownRequested) {
+      shutdownRequested=true; logSystem("info","shutdown_requested"); speaker.alert();
+      display.setEnabled(false);
+      for(uint8_t pending=0;pending<64&&delivery.takeStorage(stored);++pending) {
+        const bool ok=appendLine(weeklyLogPath(stored.weight?"/weights":"/logs",stored.weight?"history":"events",stored.epoch),stored.body,configStore.get().historyFileMaxMb*1024UL*1024UL);
+        if(stored.id[0]) delivery.storageResult(stored.id,ok);
+      }
+      SD.end(); sdReady=false;
+      digitalWrite(kBatteryPowerHoldPin,LOW);
+      // USB may still power the board: preserve acquisition and delivery, keep SD closed.
+    }
+  }
+  static char serialCommand[24]; static uint8_t serialLength=0;
+  for(uint8_t n=0;n<32&&Serial.available();++n) {
+    const char ch=Serial.read();
+    if(ch=='\n') {
+      serialCommand[serialLength]=0;
+      if(strcmp(serialCommand,"status")==0) Serial.println(buildStatusJson());
+      if(strcmp(serialCommand,"diagnostics")==0) Serial.println(buildDiagnosticsJson(true));
+      serialLength=0;
+    } else if(ch!='\r'&&serialLength<sizeof(serialCommand)-1) serialCommand[serialLength++]=ch;
+  }
   checkFactoryResetButton(now);
   dnsServer.processNextRequest();
   webServer.handleClient();
@@ -2891,13 +2939,7 @@ void loop() {
 
   if (now - lastSensorReadMs >= kSensorIntervalMs) {
     lastSensorReadMs = now;
-    scanSensors();
-    currentSnapshot = stabilityTracker.update(
-      sensorReadings,
-      configStore.get().calibrations,
-      now
-    );
-    if (currentSnapshot.changed) recordWeightEvent();
+
     const bool wifiConnected = WiFi.status() == WL_CONNECTED;
     const DeviceConfig &config = configStore.get();
     const String displayIp = wifiConnected ? WiFi.localIP().toString() :
@@ -2905,6 +2947,10 @@ void loop() {
     const String displaySsid = wifiConnected ? WiFi.SSID() :
       (accessPointActive ? kRescueSsid : config.wifiSsid);
     DisplayStatus displayStatus;
+    displayStatus.storageError=deliveryState.historyEnabled && deliveryState.storageAttempted && !deliveryState.saved;
+    displayStatus.deliveryLabel=displayStatus.storageError?"ERRORE SALVATAGGIO SD":
+      deliveryState.httpAck?"RICEVUTA DAL GESTIONALE":deliveryState.saved?"SALVATA SU MICROSD":
+      deliveryState.mqttPublished?"PUBBLICATA MQTT":deliveryState.eventId[0]?"LETTURA ACQUISITA":"IN ATTESA DI LETTURA";
     displayStatus.firmwareVersion = kFirmwareVersion;
     displayStatus.ssid = displaySsid.c_str();
     displayStatus.ipAddress = displayIp.c_str();
@@ -2932,7 +2978,7 @@ void loop() {
     displayStatus.speakerReady = speaker.ready();
     displayStatus.touchAvailable = display.touchAvailable();
     displayStatus.touchController = display.touchControllerName();
-    const BoardHardwareStatus &board = boardHardware.status();
+    const BoardHardwareStatus &board = acquisitionState.board;
     displayStatus.imuAvailable = board.imuAvailable;
     displayStatus.accelerationX = board.accelerationX;
     displayStatus.accelerationY = board.accelerationY;
@@ -2944,8 +2990,8 @@ void loop() {
   }
 
   if (now - lastScanCounterMs >= 1000) {
-    scansPerSecond = scanCounter;
-    scanCounter = 0;
+    scansPerSecond = uint64_t(acquisitionState.scans-lastUiScanCount)*1000/std::max<uint32_t>(1,now-lastScanCounterMs);
+    lastUiScanCount=acquisitionState.scans;
     lastScanCounterMs = now;
     checkPowerSource();
     readBatteryStatus();

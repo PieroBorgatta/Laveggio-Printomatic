@@ -142,3 +142,40 @@ Il watchdog heartbeat del dispositivo considera raggiungibile il gestionale
 soltanto dopo una risposta `2xx`. Dopo la soglia configurata esegue al massimo
 un riavvio e resta inibito fino a una nuova risposta valida, evitando reboot
 loop durante indisponibilita prolungate del backend.
+
+## Estensioni compatibili 2.1.0
+
+Lo snapshot ordinario `scale.snapshot` rimane valido e stabile, inviato a ogni
+nuova stabilizzazione. Il dispatcher pesate usa identificativi
+`device_id:boot_id:wN`; la sequenza del flusso pesate è indipendente da quella
+heartbeat. Deduplicare sempre per `event_id`, non soltanto per `sequence`.
+Il client MQTT delle pesate usa un client ID con suffisso `-weights`, distinto
+ dal client servizi; il topic rimane `{base}/{device_id}/weights`.
+
+Campi aggiuntivi: `calibration_revision`, `sensor_order` (posizione logica →
+canale fisico), `time_source` (`ntp`, `rtc`, `unavailable`), `time_valid`,
+`closure_detected`, `closure_peak_g`, `weight_completed`,
+`completion_experimental`. `time_synchronized` significa NTP riuscito in questo
+avvio; un timestamp RTC può essere valido con `time_synchronized=false`.
+
+Con rilevazione bascula disabilitata il flusso ordinario non cambia. In sola
+osservazione i candidati restano locali. Se il completamento sperimentale è
+abilitato, una chiusura riconosciuta produce uno snapshot aggiuntivo anche a
+peso invariato; `weight_completed=true` non autorizza la persistenza automatica
+ di lordo/tara né sostituisce la conferma dell'operatore.
+
+La firma HMAC storica resta invariata. Per usare il suggerimento di completamento
+verificare anche `completion_signature` (HMAC-SHA256 esadecimale, stesso segreto)
+sulla concatenazione UTF-8 senza newline finale:
+
+```text
+event_id + "\n" + captured_at + "\n" + weight_kg + "\n" +
+digits.join(".") + "\n" + calibration_revision + "\n" +
+(weight_completed ? "true" : "false")
+```
+
+Tutti i numeri sono in formato decimale. Il backend deve ignorare il suggerimento
+se manca la firma aggiuntiva o non è valido, mantenendo la lettura ordinaria.
+`HTTP 2xx` è la ricevuta dell'endpoint; MQTT QoS 0 non prova l'acquisizione nel DB.
+Il dispositivo non implementa una coda persistente di reinvio. Le saturazioni
+RAM e i fallimenti dei trasporti sono visibili in `status.reliability`.

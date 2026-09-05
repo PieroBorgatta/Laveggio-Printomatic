@@ -33,7 +33,7 @@ confermare boot senza reset ciclici, modello corretto e partizioni riconosciute.
 
 - abilitare lo speaker dal portale;
 - simulare una combinazione valida e stabile: deve suonare un solo doppio tono
-  quando viene creato il nuovo record;
+  solo dopo il salvataggio riuscito del nuovo record sulla microSD;
 - mantenere invariato il peso: non deve ripetere il tono;
 - cambiare peso stabile: deve suonare di nuovo;
 - disabilitare lo speaker lasciando acceso il display: non deve piu suonare;
@@ -60,3 +60,25 @@ controllati, prove di isteresi e confronto con l'indicazione meccanica. L'esito
 e pronto per l'uso operativo interno soltanto se display, audio, alimentazione,
 storico e peso reale passano insieme; il sistema resta non fiscale e non
 sostituisce una pesa omologata.
+
+## Collaudo aggiuntivo 2.1: priorità, ordine e chiusura sperimentale
+
+- Con quattro AS5600 collegati, osservare `max_sample_gap_ms`, `sample_overruns`
+  e i contatori delle code durante download storico, diagnostica, scritture SD,
+  Wi-Fi instabile e destinatario HTTPS lento. Confrontare eventi ricevuti e ID
+  con quelli acquisiti; misurare latenza e perdite, senza dedurle dalla sola UI.
+- Riordinare due sensori dalla calibrazione, verificare il contributo delle cifre,
+  riavviare e verificare ordine/revisione. I punti devono seguire il canale fisico.
+- Tentare un punto rumoroso o sovrapposto: il salvataggio deve essere rifiutato.
+- Sincronizzare NTP, riavviare senza rete e verificare `time_source=rtc`, UTC
+  corretta e `time_synchronized=false`. RTC non valido deve dare ora indisponibile.
+- Verificare salvataggio SD, risposta HTTPS e pubblicazione MQTT separatamente;
+  staccare la SD e controllare che il display non dichiari il peso salvato.
+- Provare luminosità, attenuazione/ripristino touch, avviso batteria e pressione
+  lunga del tasto batteria, sia con USB sia con sola batteria.
+- Per la bascula seguire [la procedura sperimentale](reliability-2.1.md): prima
+  osservazione dei colpi, poi confronto di chiusure e disturbi, infine eventuale
+  suggerimento di completamento. Le due opzioni partono disabilitate.
+
+La verifica seriale del 5 settembre conferma periferiche raggiungibili e scansione
+senza sensori esterni. Non sostituisce nessuna delle prove meccaniche sopra.

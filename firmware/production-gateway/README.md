@@ -149,3 +149,22 @@ ESP32-C6 non puo trasformare o migrare l'hardware.
 
 La sequenza completa per il collaudo e in
 [`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).
+
+## Versione 2.1.0
+
+Acquisizione dedicata a 50 Hz, trasporti prioritari indipendenti, RTC UTC offline,
+calibrazioni versionate con CRC, riordino dei canali, diagnosi del rumore,
+conferme distinte di salvataggio/consegna e chiusura bascula sperimentale.
+La rilevazione è inizialmente disattivata. Parametri e prove:
+[guida 2.1](../../docs/reliability-2.1.md).
+
+Per i test C++ del nucleo, con un compilatore host:
+
+```sh
+g++ -std=c++17 -Wall -Wextra -Werror -Iinclude src/ScaleCore.cpp src/ReliabilityCore.cpp tests/reliability_test.cpp -o reliability-test
+./reliability-test
+```
+
+Per aggiornare una scheda già configurata usare OTA firmato o l'upload PlatformIO
+con file separati. Il binario factory combinato può cancellare la NVS: riservarlo
+alla prima installazione. Il comando seriale `status` restituisce lo stato corrente.

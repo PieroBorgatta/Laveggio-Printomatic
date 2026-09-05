@@ -265,6 +265,7 @@ void DisplayDriver::pollTouch() {
   uint16_t x = 0, y = 0;
   const bool pressed = readTouchPoint(x, y);
   if (pressed) {
+    lastInteractionMs_=now;
     if (!touchPressed_) { touchStartX_ = touchLastX_ = x; touchStartY_ = touchLastY_ = y; touchPressed_ = true; }
     else { touchLastX_ = x; touchLastY_ = y; }
     return;
@@ -402,6 +403,9 @@ void DisplayDriver::cancelFactoryResetProgress() {
 
 void DisplayDriver::render(const laveggio::SensorReading readings[laveggio::kChannelCount], const laveggio::WeightSnapshot &snapshot, const DisplayStatus &status) {
   pollTouch();
+  const bool dimmed=dimSeconds_ && millis()-lastInteractionMs_>uint32_t(dimSeconds_)*1000;
+  const uint16_t duty=enabled_?(dimmed?std::min<uint8_t>(brightness_,10):brightness_)*1023/100:0;
+  ledcWrite(kLcdBacklight,duty);
   if (!enabled_ || resetProgressActive_ || static_cast<int32_t>(networkInfoUntilMs_ - millis()) > 0) return;
   if (networkInfoUntilMs_ != 0) { networkInfoUntilMs_ = 0; pageDirty_ = true; }
   const uint32_t interval = page_ == 0 ? 120 : 850;
@@ -413,14 +417,16 @@ void DisplayDriver::render(const laveggio::SensorReading readings[laveggio::kCha
 
 void DisplayDriver::drawWeightPage(const laveggio::SensorReading readings[laveggio::kChannelCount], const laveggio::WeightSnapshot &snapshot, const DisplayStatus &status) {
   if (pageDirty_ || lastWeightKg_ == UINT32_MAX) drawFrame();
-  if (snapshot.weightKg != lastWeightKg_ || snapshot.valid != lastValid_) {
+  if (pageDirty_ || snapshot.weightKg != lastWeightKg_ || snapshot.valid != lastValid_ || snapshot.stable != lastStable_) {
     const uint16_t background = snapshot.stable ? kGreenSurface : kSurfaceBlue;
     fillCard(10, 61, 220, 108, background); drawText(22, 72, "PESO RILEVATO", 1, kMuted, background);
     char weight[10]; if (snapshot.valid) snprintf(weight, sizeof(weight), "%lu", snapshot.weightKg); else snprintf(weight, sizeof(weight), "-----");
     drawText(20, 99, weight, 5, snapshot.stable ? kGreen : kNavy, background); drawText(184, 143, "KG", 2, kMuted, background);
-    drawPill(146, 72, snapshot.stable ? "CONFERMATA" : "IN LETTURA", snapshot.stable ? kGreen : kBlue);
-    lastWeightKg_ = snapshot.weightKg; lastValid_ = snapshot.valid;
+    drawPill(146, 72, snapshot.stable ? "STABILE" : "IN LETTURA", snapshot.stable ? kGreen : kBlue);
+    lastWeightKg_ = snapshot.weightKg; lastValid_ = snapshot.valid; lastStable_=snapshot.stable;
   }
+  fillRect(10,172,220,15,kWhite);
+  drawText(12,176,status.deliveryLabel,1,status.storageError?kRed:kMuted,kWhite);
   for (uint8_t channel = 0; channel < laveggio::kChannelCount; ++channel) {
     const uint16_t x = 10 + (channel % 2) * 112; const uint16_t y = 193 + (channel / 2) * 43;
     const uint16_t background = readings[channel].healthy() ? kGreenSurface : kAmberSurface; fillCard(x, y, 108, 36, background);
@@ -495,4 +501,8 @@ void DisplayDriver::drawServicesPage(const DisplayStatus &status) {
   const uint8_t first = std::min<uint8_t>(scrollRow_, 2);
   for (uint8_t visible = 0; visible < 5 && first + visible < 7; ++visible) drawStatusRow(58 + visible * 44, rows[first + visible].label, rows[first + visible].value, rows[first + visible].color);
   drawFooter();
+}
+
+void DisplayDriver::configureBrightness(uint8_t percent,uint16_t dimSeconds) {
+  brightness_=constrain(percent,5,100); dimSeconds_=dimSeconds; lastInteractionMs_=millis();
 }

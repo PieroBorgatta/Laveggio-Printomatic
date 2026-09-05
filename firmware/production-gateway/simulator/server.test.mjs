@@ -16,7 +16,7 @@ test('speaker confirmation can be disabled and persists independently from displ
 
 test('new ESP32-S3 board telemetry exposes touch, IMU, RTC and native battery',()=>withServer(async base=>{const status=await (await fetch(`${base}/api/status`)).json();assert.equal(status.board.model,'Waveshare ESP32-S3-Touch-LCD-2.8');assert.equal(status.board.touch_controller,'CST3530');assert.equal(status.board.imu_available,true);assert.equal(status.board.rtc_valid,true);assert.equal(status.power.battery_present,true);assert.equal(status.power.battery_voltage_mv,4028)}));
 
-test('calibration capture persists the selected detent',()=>withServer(async base=>{const body=new URLSearchParams({channel:'2',position:'8'});const saved=await (await post(`${base}/api/calibration/capture`,body)).json();assert.equal(saved.ok,true);const calibration=await (await fetch(`${base}/api/calibration`)).json();assert.equal(calibration.channels[2].points[8].enabled,true);assert.equal(calibration.channels[2].points[8].raw,saved.raw)}));
+test('calibration capture persists the selected detent',()=>withServer(async base=>{await post(`${base}/api/calibration/reset`,new URLSearchParams({channel:'2'}));const body=new URLSearchParams({channel:'2',position:'8'});const saved=await (await post(`${base}/api/calibration/capture`,body)).json();assert.equal(saved.ok,true);const calibration=await (await fetch(`${base}/api/calibration`)).json();assert.equal(calibration.channels[2].points[8].enabled,true);assert.equal(calibration.channels[2].points[8].raw,saved.raw)}));
 
 test('blank secret fields do not overwrite configured values',()=>withServer(async base=>{const common={device_id:'pesalink-02',backend_url:'https://backend/events',tls_ca_certificate:'CA',notification_url:'',stable_ms:'800',heartbeat_seconds:'45'};await post(`${base}/api/settings/integration`,new URLSearchParams({...common,backend_token:'secret'}));await post(`${base}/api/settings/integration`,new URLSearchParams({...common,backend_token:''}));const settings=await (await fetch(`${base}/api/settings`)).json();assert.equal(settings.backend_token,'secret');assert.equal(settings.stable_ms,800)}));
 
@@ -53,3 +53,18 @@ test('plain HTTP integration endpoints are rejected',()=>withServer(async base=>
 test('unknown API routes return a structured 404',()=>withServer(async base=>{const response=await fetch(`${base}/api/not-present`);assert.equal(response.status,404);assert.match((await response.json()).error,/non trovato/)}));
 
 test('diagnostic log export contains sensor samples',()=>withServer(async base=>{const response=await fetch(`${base}/api/logs/export`);assert.equal(response.status,200);assert.match(response.headers.get('content-disposition'),/pesalink-log-completo/);const record=JSON.parse((await response.text()).trim());assert.equal(record.event,'sensor_diagnostics');assert.equal(record.sensors.length,4)}));
+
+test('experimental closure is opt-in, validates thresholds and retains settings on failure',()=>withServer(async base=>{
+ const before=await (await fetch(`${base}/api/settings/reliability`)).json();
+ assert.equal(before.closure_enabled,false);assert.equal(before.closure_complete_weight,false);
+ let response=await post(`${base}/api/settings/reliability`,new URLSearchParams({...before,closure_enabled:'true',closure_quiet_g:'0.7'}));assert.equal(response.status,400);
+ assert.deepEqual(await (await fetch(`${base}/api/settings/reliability`)).json(),before);
+ response=await post(`${base}/api/settings/reliability`,new URLSearchParams({...before,closure_enabled:'true',closure_complete_weight:'false',closure_threshold_g:'0.5'}));assert.equal(response.status,200);
+ const status=await(await fetch(`${base}/api/status`)).json();assert.equal(status.reliability.closure.enabled,true);assert.equal(status.reliability.closure.complete_weight,false);
+}));
+test('sensor order rejects duplicates and preserves physical calibration points',()=>withServer(async base=>{
+ const before=await(await fetch(`${base}/api/calibration`)).json();
+ let response=await post(`${base}/api/calibration/order`,new URLSearchParams({slot_0:'0',slot_1:'0',slot_2:'2',slot_3:'3'}));assert.equal(response.status,400);
+ response=await post(`${base}/api/calibration/order`,new URLSearchParams({slot_0:'3',slot_1:'2',slot_2:'1',slot_3:'0'}));assert.equal(response.status,200);
+ const after=await(await fetch(`${base}/api/calibration`)).json();assert.deepEqual(after.sensor_order,[3,2,1,0]);assert.deepEqual(after.channels,before.channels);assert.equal(after.revision,before.revision+1);
+}));

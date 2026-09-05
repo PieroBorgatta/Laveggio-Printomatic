@@ -46,7 +46,7 @@ bool SpeakerDriver::begin() {
 }
 
 void SpeakerDriver::confirmWeight() {
-  if (enabled_ && ready_ && task_ != nullptr) xTaskNotifyGive(task_);
+  if (enabled_ && ready_ && task_ != nullptr) xTaskNotify(task_,1,eSetBits);
 }
 
 void SpeakerDriver::testTone() {
@@ -59,8 +59,9 @@ void SpeakerDriver::taskEntry(void *argument) {
 
 void SpeakerDriver::taskLoop() {
   while (true) {
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    if (enabled_) playConfirmation();
+    uint32_t event=0;
+    xTaskNotifyWait(0,UINT32_MAX,&event,portMAX_DELAY);
+    if (enabled_) { if(event&2) { playTone(330,220,30); vTaskDelay(pdMS_TO_TICKS(80)); playTone(330,220,30); } else playConfirmation(); }
   }
 }
 
@@ -98,3 +99,5 @@ void SpeakerDriver::playTone(uint16_t frequency, uint16_t durationMs, uint8_t am
   size_t bytesWritten = 0;
   i2s_channel_write(txChannel_, samples, sizeof(samples), &bytesWritten, pdMS_TO_TICKS(50));
 }
+
+void SpeakerDriver::alert() { if(enabled_&&ready_&&task_) xTaskNotify(task_,2,eSetBits); }

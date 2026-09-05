@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.0.0" src="https://img.shields.io/badge/firmware-2.0.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.1.0" src="https://img.shields.io/badge/firmware-2.1.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 24 su 24" src="https://img.shields.io/badge/test-24%2F24_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 26 su 26" src="https://img.shields.io/badge/test-26%2F26_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -50,11 +50,21 @@ documentazione hardware.
 > fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
-> Il firmware ESP32-S3 V2 e il profilo compatibile V1 compilano e il simulatore
-> web è stato verificato in Chromium. Poiché la nuova scheda non è ancora
-> disponibile, display, touch, speaker, batteria, RTC, IMU e microSD restano da
-> convalidare fisicamente al suo arrivo. Le precedenti prove sull'ESP32-C6 non
-> costituiscono prova del nuovo hardware.
+> La versione 2.1.0 separa acquisizione e invio prioritario dalle funzioni accessorie,
+> completa l'RTC offline e introduce ordine sensori e rilevazione sperimentale
+> della chiusura. La funzione bascula parte disattivata e richiede prove sul
+> montaggio reale. Esiti e limiti del collaudo sono in [test-results](docs/test-results.md).
+
+## Novità 2.1.0
+
+- Letture nominali a 50 Hz su task dedicato; HTTPS e MQTT delle pesate separati da portale, storico e heartbeat.
+- RTC UTC per riavvii senza rete, dopo la prima sincronizzazione; origine dell'ora esplicita.
+- Stati distinti: lettura stabile, salvataggio SD, ricezione HTTPS e pubblicazione MQTT.
+- Ordine dei sensori configurabile, controlli di rumore e sovrapposizione, calibrazione NVS con revisione e CRC.
+- Rilevazione **sperimentale** di colpo/quiete per la chiusura della bascula: soglie, tempi e modalità di sola osservazione.
+- Luminosità, attenuazione, avvisi batteria e gestione del tasto di alimentazione.
+
+[Guida completa, impostazioni e procedura di prova](docs/reliability-2.1.md).
 
 ## ✦ Funzioni
 
@@ -64,7 +74,7 @@ documentazione hardware.
 | **Interfacce** | Display verticale a card, swipe orizzontale fra cinque pagine, scroll verticale, selezione touch dal footer, dashboard web responsive e tema chiaro/scuro |
 | **Storico** | Prime 20 pesate al caricamento, export coerente con i filtri, file NDJSON settimanali e retention configurabile su microSD |
 | **Autodiagnosi** | Test di sensori, microSD, batteria, touch, speaker, IMU, RTC, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore |
-| **Audio** | Doppio tono asincrono su PCM5101 alla conferma di una nuova pesata, disabilitabile e persistente dal portale web |
+| **Audio** | Doppio tono asincrono su PCM5101 dopo salvataggio SD, tono distinto per errore, disabilitabile e persistente dal portale web |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
 | **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza `PesaLink_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
@@ -130,8 +140,8 @@ rimane non valida e non viene registrata come nuova pesata.
 3. Tolleranza e isteresi determinano la cifra riconosciuta senza oscillazioni.
 4. Le quattro cifre vengono moltiplicate e sommate per ottenere i chilogrammi.
 5. La combinazione deve restare invariata per la finestra di stabilità.
-6. Solo una combinazione valida, stabile e diversa dalla precedente genera una
-   nuova riga nello storico e un evento firmato verso il gestionale.
+6. Una combinazione valida, stabile e diversa dalla precedente genera una
+   nuova riga nello storico e un evento firmato verso il gestionale. Una chiusura sperimentale può aggiungere un evento di completamento.
 
 La microSD conserva lo storico indipendentemente dalla connessione di rete, ma
 non viene usata come coda automatica di reinvio.
@@ -211,8 +221,8 @@ py -m platformio run
 
 | Risorsa | Utilizzo verificato |
 | --- | ---: |
-| RAM statica | `54.436 / 327.680 byte` · `16,6%` |
-| Flash applicazione | `1.657.078 / 6.291.456 byte` · `26,3%` |
+| RAM statica | Vedere i risultati della build 2.1 in `docs/test-results.md` |
+| Flash applicazione | Vedere i risultati della build 2.1 in `docs/test-results.md` |
 | Profili compilati | V2 `CST3530` e V1 `CST328`, entrambi con autodetect di fallback |
 | Slot OTA | `6 MiB` ciascuno su flash da 16 MB |
 
@@ -272,9 +282,9 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
-- [x] Test host `24/24`, browser Chromium e build firmate ESP32-S3 V2/V1 completati
+- [x] Test host `26/26`, browser Chromium e build firmate ESP32-S3 V2/V1 completati
 - [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
-- [ ] Collaudo fisico del nuovo ST7789, touch, speaker, RTC, IMU e batteria
+- [ ] Collaudo completo del display, touch, speaker, RTC in blackout, IMU sulla bascula e batteria
 - [ ] Calibrazione meccanica completa delle quattro manopole
 - [ ] Collaudo reale di microSD FAT32, batteria, commutazione e rollback forzato
 - [ ] Implementazione del contratto nel gestionale CaskLogic

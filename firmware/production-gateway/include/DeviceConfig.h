@@ -4,6 +4,7 @@
 #include <Preferences.h>
 
 #include "ScaleCore.h"
+#include "ReliabilityCore.h"
 
 struct DeviceConfig {
   String deviceId;
@@ -57,6 +58,14 @@ struct DeviceConfig {
   uint16_t batteryMinMv = 3200;
   uint16_t batteryMaxMv = 4200;
   uint16_t batteryCapacityMah = 1200;
+  uint8_t sensorOrder[4] = {0,1,2,3};
+  uint32_t calibrationRevision = 0;
+  bool calibrationChecksumValid = true;
+  uint8_t displayBrightness = 65;
+  uint16_t displayDimSeconds = 120;
+  uint8_t batteryLowPercent = 15;
+  bool shutdownButtonEnabled = true;
+  laveggio::ClosureConfig closure;
   laveggio::ChannelCalibration calibrations[laveggio::kChannelCount];
 };
 
@@ -66,6 +75,7 @@ class ConfigStore {
   const DeviceConfig &get() const { return config_; }
   DeviceConfig &mutableConfig() { return config_; }
   bool saveSettings();
+  bool saveReliabilitySettings();
   bool saveDisplayDefaultOn();
   bool saveSpeakerDefaultOn();
   bool saveHeartbeatRestartSuppressed();

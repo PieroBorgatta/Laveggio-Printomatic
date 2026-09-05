@@ -129,3 +129,7 @@ sostituiscono la cifratura del trasporto. Dettagli in
 - stato locale evidente: sensori, Wi-Fi, backend e misura valida;
 - calibrazione salvata con versione e checksum;
 - fallback manuale completo quando sensori o rete non sono disponibili.
+
+## Aggiornamento 2.1
+
+Il percorso di acquisizione e i trasporti pesate sono ora task distinti dalle funzioni accessorie. La calibrazione è versionata e protetta da CRC. Consultare [la guida 2.1](reliability-2.1.md) per code, stabilità dopo pause, RTC, ordine sensori e completamento sperimentale.
