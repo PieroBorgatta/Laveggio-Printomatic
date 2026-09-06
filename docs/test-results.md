@@ -9,9 +9,9 @@
   `-Wall -Wextra -Werror`.
 - Build PlatformIO V2 e V1 riuscite: RAM statica
   `59.036 / 327.680 byte` (`18,0%`), flash applicazione
-  `1.718.506 / 6.291.456 byte` (`27,3%`). La chiave privata di firma non era
-  disponibile su questa macchina, quindi sono stati prodotti i binari USB ma
-  non nuovi artefatti `.signed.bin` per OTA.
+  `1.718.506 / 6.291.456 byte` (`27,3%`). Generati i nuovi artefatti OTA V1 e
+  V2 con la chiave di produzione ruotata; entrambe le firme sono state
+  verificate indipendentemente con OpenSSL.
 - Portale verificato con WebKit in emulazione iPhone a 393 px: documento senza
   overflow (`393/393`), campi data larghi 337 px e contenuti entro il margine
   destro a 366 px. Visibili anche controlli di spegnimento e riavvio.
@@ -21,6 +21,10 @@
   IMU/RTC/batteria disponibili e intervallo acquisizione massimo 20 ms.
 - La NVS preesistente è rimasta intatta: SSID, IP statico, capacità batteria e
   stato predefinito del display sono stati riletti dopo il flash.
+- Dopo l'installazione USB della nuova chiave pubblica è stato eseguito un OTA
+  reale da `1.748.112 byte`: firma verificata sul dispositivo, riavvio sulla
+  partizione aggiornata e registro concluso con `ota_boot_validated` e
+  `signature_verified=true`.
 
 Il flusso captive è stato verificato a livello software e compilato sulla
 scheda; resta consigliata una prova completa con l'iPhone reale per osservare

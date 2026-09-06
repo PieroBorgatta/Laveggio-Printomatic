@@ -22,6 +22,7 @@ firmware/production-gateway/output/playwright/
 .env.*
 secrets.h
 credentials.h
+private_key.pem
 
 # Local simulator state
 firmware/production-gateway/simulator/.state/

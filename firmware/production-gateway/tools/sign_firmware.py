@@ -1,6 +1,8 @@
 Import("env")
 
+import hashlib
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,10 +24,34 @@ def sign_firmware(source, target, env):
             f"chiave assente: {key_path}"
         )
         return
+    if os.name != "nt" and key_path.stat().st_mode & 0o077:
+        raise RuntimeError(
+            f"Permessi non sicuri per {key_path}: usare chmod 600 prima di firmare"
+        )
 
     openssl = shutil.which("openssl")
     if not openssl:
         raise RuntimeError("OpenSSL non trovato: impossibile firmare il firmware OTA")
+    public_der = subprocess.run(
+        [openssl, "pkey", "-in", str(key_path), "-pubout", "-outform", "DER"],
+        check=True,
+        capture_output=True,
+    ).stdout
+    key_fingerprint = hashlib.sha256(public_der).hexdigest()
+    public_key_header = Path(env.subst("$PROJECT_INCLUDE_DIR")) / "OtaPublicKey.h"
+    header_text = public_key_header.read_text(encoding="ascii")
+    fingerprint_match = re.search(
+        r"SHA-256 \(SubjectPublicKeyInfo DER\): ([0-9a-f]{64})", header_text
+    )
+    if not fingerprint_match:
+        raise RuntimeError(
+            "Impronta assente da OtaPublicKey.h: rigenerare l'header con public_key_to_header.py"
+        )
+    if fingerprint_match.group(1) != key_fingerprint:
+        raise RuntimeError(
+            "La chiave privata di firma non corrisponde alla chiave pubblica incorporata nel firmware"
+        )
+
     signed = firmware.with_name("firmware.signed.bin")
     signature = firmware.with_name("firmware.signature.der")
     subprocess.run(
