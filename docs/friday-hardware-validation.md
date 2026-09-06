@@ -30,8 +30,9 @@ confermare boot senza reset ciclici, modello corretto e partizioni riconosciute.
 - scorrere verticalmente le pagine con contenuto più lungo;
 - provare i cinque pulsanti touch nel footer;
 - spegnere e riaccendere il display dal portale e verificare la persistenza;
-- provare BOOT breve e tenere premuto solo in modo controllato per verificare
-  l'avviso di ripristino a 10 secondi.
+- provare BOOT breve; con il display spento, tenere BOOT e poi il tasto
+  alimentazione solo in modo controllato per verificare il conto alla rovescia
+  del ripristino. Rilasciare prima dei 10 secondi per non cancellare la NVS;
 
 ## Audio e pesata
 

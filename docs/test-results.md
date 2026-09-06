@@ -1,5 +1,15 @@
 # Risultati delle prove
 
+## Firmware 2.1.2 — 6 settembre 2026
+
+- Corretto il risveglio forzato del controller LCD e della retroilluminazione
+  durante il conto alla rovescia del ripristino, anche se il display era spento.
+- BOOT e tasto alimentazione condividono il ripristino a 10 secondi; rilasciare
+  il tasto alimentazione tra 2 e 10 secondi mantiene lo spegnimento ordinario.
+- `35/35` test API del simulatore superati; build V1/V2 riuscite e artefatti OTA
+  firmati generati. RAM statica `59.036 / 327.680 byte` (`18,0%`), flash
+  applicazione `1.718.914 / 6.291.456 byte` (`27,3%`).
+
 ## Firmware 2.1.1 — 6 settembre 2026
 
 - `34/34` test API del simulatore superati, inclusi persistenza dello

@@ -46,7 +46,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.1.1";
+constexpr char kFirmwareVersion[] = "2.1.2";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -61,6 +61,7 @@ constexpr uint8_t kBatteryPowerKeyPin = 6;
 constexpr uint8_t kBatteryPowerHoldPin = 7;
 constexpr uint32_t kFactoryResetHoldMs = 10000;
 constexpr uint32_t kFactoryResetFeedbackDelayMs = 600;
+constexpr uint32_t kBatteryShutdownHoldMs = 2000;
 constexpr uint32_t kButtonDebounceMs = 40;
 constexpr uint32_t kSensorIntervalMs = 20;
 constexpr uint32_t kHealthIntervalMs = 250;
@@ -191,7 +192,8 @@ uint32_t stationConnectedSinceMs = 0;
 uint32_t scheduledRestartMs = 0;
 uint32_t scheduledNetworkApplyMs = 0;
 uint32_t factoryResetPressedSinceMs = 0;
-bool factoryResetTriggered = false;
+enum class FactoryResetSource : uint8_t { None, Boot, BatteryPower };
+FactoryResetSource factoryResetSource = FactoryResetSource::None;
 uint32_t authBlockedUntilMs = 0;
 String csrfToken;
 String lastHeartbeatAckAt;
@@ -1225,12 +1227,24 @@ void printNetworkStatus() {
   );
 }
 
+void performFactoryReset(FactoryResetSource source) {
+  factoryResetSource = source;
+  const char *sourceLabel = source == FactoryResetSource::BatteryPower
+    ? "battery_power_button"
+    : "boot_button";
+  logSystem("warning", "factory_reset", String(sourceLabel) + "_held_ms=" + String(kFactoryResetHoldMs));
+  const bool resetOk = configStore.factoryReset();
+  Serial.printf("Factory reset: %s; release button to restart\n", resetOk ? "completed" : "failed");
+  display.showFactoryReset(source == FactoryResetSource::BatteryPower, resetOk);
+}
+
 void checkFactoryResetButton(uint32_t now) {
   const bool pressed = digitalRead(kFactoryResetButtonPin) == LOW;
+  if (factoryResetSource == FactoryResetSource::BatteryPower) return;
   if (!pressed) {
     const uint32_t heldMs = factoryResetPressedSinceMs == 0 ? 0 : now - factoryResetPressedSinceMs;
     factoryResetPressedSinceMs = 0;
-    if (!factoryResetTriggered) {
+    if (factoryResetSource == FactoryResetSource::None) {
       if (heldMs >= kFactoryResetFeedbackDelayMs) display.cancelFactoryResetProgress();
       else if (heldMs >= kButtonDebounceMs) display.nextPage();
       return;
@@ -1239,22 +1253,48 @@ void checkFactoryResetButton(uint32_t now) {
     ESP.restart();
     return;
   }
-  if (factoryResetTriggered) return;
+  if (factoryResetSource != FactoryResetSource::None) return;
   if (factoryResetPressedSinceMs == 0) {
     factoryResetPressedSinceMs = now;
     return;
   }
   const uint32_t heldMs = now - factoryResetPressedSinceMs;
   if (heldMs >= kFactoryResetFeedbackDelayMs) {
-    display.showFactoryResetProgress(heldMs, kFactoryResetHoldMs);
+    display.showFactoryResetProgress(heldMs, kFactoryResetHoldMs, false);
   }
   if (heldMs < kFactoryResetHoldMs) return;
+  performFactoryReset(FactoryResetSource::Boot);
+}
 
-  factoryResetTriggered = true;
-  logSystem("warning", "factory_reset", "boot_button_held_ms=" + String(kFactoryResetHoldMs));
-  const bool resetOk = configStore.factoryReset();
-  Serial.printf("Factory reset: %s; release BOOT to restart\n", resetOk ? "completed" : "failed");
-  display.showFactoryReset();
+bool checkBatteryPowerButton(uint32_t now) {
+  const bool pressed = digitalRead(kBatteryPowerKeyPin) == HIGH;
+  if (!batteryButtonReleased) {
+    if (!pressed) batteryButtonReleased = true;
+    return false;
+  }
+  if (factoryResetSource == FactoryResetSource::Boot) return false;
+  if (!pressed) {
+    const uint32_t heldMs = batteryButtonSince == 0 ? 0 : now - batteryButtonSince;
+    batteryButtonSince = 0;
+    if (factoryResetSource == FactoryResetSource::BatteryPower) {
+      delay(150);
+      ESP.restart();
+      return false;
+    }
+    if (heldMs >= kFactoryResetFeedbackDelayMs) display.cancelFactoryResetProgress();
+    return configStore.get().shutdownButtonEnabled && heldMs >= kBatteryShutdownHoldMs;
+  }
+  if (factoryResetSource != FactoryResetSource::None) return false;
+  if (batteryButtonSince == 0) {
+    batteryButtonSince = now;
+    return false;
+  }
+  const uint32_t heldMs = now - batteryButtonSince;
+  if (heldMs >= kFactoryResetFeedbackDelayMs) {
+    display.showFactoryResetProgress(heldMs, kFactoryResetHoldMs, true);
+  }
+  if (heldMs >= kFactoryResetHoldMs) performFactoryReset(FactoryResetSource::BatteryPower);
+  return false;
 }
 
 void sendSecurityHeaders() {
@@ -3057,21 +3097,16 @@ void loop() {
     const bool ok=appendLine(weeklyLogPath(stored.weight?"/weights":"/logs",stored.weight?"history":"events",stored.epoch),stored.body,configStore.get().historyFileMaxMb*1024UL*1024UL);
     if(stored.id[0]) { delivery.storageResult(stored.id,ok); if(stored.weight) { if(ok) speaker.confirmWeight(); else speaker.alert(); } }
   }
-  if(configStore.get().shutdownButtonEnabled) {
-    const bool pressed=digitalRead(kBatteryPowerKeyPin)==HIGH;
-    if(!pressed) { batteryButtonReleased=true; batteryButtonSince=0; }
-    else if(batteryButtonReleased && !batteryButtonSince) batteryButtonSince=now;
-    if(batteryButtonSince && now-batteryButtonSince>=2000 && !shutdownRequested) {
-      shutdownRequested=true; logSystem("info","shutdown_requested"); speaker.alert();
-      display.setEnabled(false);
-      for(uint8_t pending=0;pending<64&&delivery.takeStorage(stored);++pending) {
-        const bool ok=appendLine(weeklyLogPath(stored.weight?"/weights":"/logs",stored.weight?"history":"events",stored.epoch),stored.body,configStore.get().historyFileMaxMb*1024UL*1024UL);
-        if(stored.id[0]) delivery.storageResult(stored.id,ok);
-      }
-      SD.end(); sdReady=false;
-      digitalWrite(kBatteryPowerHoldPin,LOW);
-      // USB may still power the board: preserve acquisition and delivery, keep SD closed.
+  if(checkBatteryPowerButton(now) && !shutdownRequested) {
+    shutdownRequested=true; logSystem("info","shutdown_requested"); speaker.alert();
+    display.setEnabled(false);
+    for(uint8_t pending=0;pending<64&&delivery.takeStorage(stored);++pending) {
+      const bool ok=appendLine(weeklyLogPath(stored.weight?"/weights":"/logs",stored.weight?"history":"events",stored.epoch),stored.body,configStore.get().historyFileMaxMb*1024UL*1024UL);
+      if(stored.id[0]) delivery.storageResult(stored.id,ok);
     }
+    SD.end(); sdReady=false;
+    digitalWrite(kBatteryPowerHoldPin,LOW);
+    // USB may still power the board: preserve acquisition and delivery, keep SD closed.
   }
   static char serialCommand[24]; static uint8_t serialLength=0;
   for(uint8_t n=0;n<32&&Serial.available();++n) {

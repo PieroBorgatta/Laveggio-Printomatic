@@ -410,38 +410,44 @@ void DisplayDriver::showNetworkInfo(const String &ssid, const String &wifiPasswo
   if (!wifiPassword.isEmpty()) { drawText(20, 249, "PASSWORD WIFI", 1, kMuted, kSurfaceBlue); drawWrappedText(116, 249, wifiPassword, 1, kText, kSurfaceBlue); }
 }
 
-void DisplayDriver::showFactoryReset() {
-  resetProgressActive_ = true; networkInfoUntilMs_ = millis() + 3600000UL; ledcWrite(kLcdBacklight, 650);
+void DisplayDriver::showFactoryReset(bool powerButton, bool successful) {
+  resetProgressActive_ = true; networkInfoUntilMs_ = millis() + 3600000UL; wakeForCriticalScreen();
   fillRect(0, 0, kWidth, kHeight, kNavy); fillRect(0, 0, kWidth, 54, kRed); drawText(14, 17, "RIPRISTINO", 2, kWhite, kRed);
   fillCard(14, 92, 212, 110, kRedSurface); drawText(28, 112, "CONFIGURAZIONE", 2, kText, kRedSurface);
-  drawText(28, 146, "AZZERATA", 3, kRed, kRedSurface); drawText(28, 220, "RILASCIA BOOT", 2, kAmber, kNavy);
+  drawText(28, 146, successful ? "AZZERATA" : "ERRORE", 3, kRed, kRedSurface);
+  drawText(28, 220, powerButton ? "RILASCIA PWR" : "RILASCIA BOOT", 2, kAmber, kNavy);
   drawText(28, 248, "PER RIAVVIARE", 2, kMuted, kNavy);
 }
 
-void DisplayDriver::showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs) {
+void DisplayDriver::showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs, bool powerButton) {
   if (totalMs == 0) return;
   const uint32_t now = millis(); if (resetProgressActive_ && now - lastResetProgressMs_ < 100) return; lastResetProgressMs_ = now;
   if (!resetProgressActive_) {
-    resetProgressActive_ = true; networkInfoUntilMs_ = millis() + 3600000UL; ledcWrite(kLcdBacklight, 650);
+    resetProgressActive_ = true; networkInfoUntilMs_ = millis() + 3600000UL; wakeForCriticalScreen();
     fillRect(0, 0, kWidth, kHeight, kNavy); fillRect(0, 0, kWidth, 54, kAmber); drawText(14, 17, "RIPRISTINO", 2, kNavy, kAmber);
-    drawText(18, 82, "TIENI PREMUTO BOOT", 2, kText, kNavy); drawText(18, 245, "RILASCIA PER ANNULLARE", 1, kMuted, kNavy);
+    drawText(18, 82, powerButton ? "TASTO ALIMENTAZIONE" : "TIENI PREMUTO BOOT", 2, kText, kNavy);
+    drawText(18, 228, powerButton ? "RILASCIA DOPO 2 S" : "RILASCIA", 1, kMuted, kNavy);
+    drawText(18, 245, powerButton ? "PER SPEGNERE" : "PER ANNULLARE", 1, kMuted, kNavy);
   }
   elapsedMs = std::min(elapsedMs, totalMs); const uint16_t progressWidth = static_cast<uint16_t>((elapsedMs * 204ULL) / totalMs);
   fillCard(16, 172, 208, 28, kMuted); fillCard(18, 174, 204, 24, kSurface); if (progressWidth > 0) fillCard(18, 174, progressWidth, 24, kAmber);
   fillRect(18, 120, 204, 35, kNavy); char countdown[20];
-  snprintf(countdown, sizeof(countdown), "MANCANO %LU S", static_cast<unsigned long>((totalMs - elapsedMs + 999) / 1000));
+  snprintf(countdown, sizeof(countdown), "MANCANO %lu S", static_cast<unsigned long>((totalMs - elapsedMs + 999) / 1000));
   drawText(28, 130, countdown, 2, kText, kNavy);
 }
 
 void DisplayDriver::cancelFactoryResetProgress() {
   if (!resetProgressActive_) return;
   resetProgressActive_ = false; lastResetProgressMs_ = 0; networkInfoUntilMs_ = 0; lastRenderMs_ = 0;
-  lastWeightKg_ = UINT32_MAX; pageDirty_ = true; ledcWrite(kLcdBacklight, enabled_ ? 650 : 0);
+  lastWeightKg_ = UINT32_MAX; pageDirty_ = true; autoOffSleeping_ = false; lastInteractionMs_ = millis();
+  if (enabled_) { command(0x29); ledcWrite(kLcdBacklight, brightness_ * 1023 / 100); }
+  else { command(0x28); ledcWrite(kLcdBacklight, 0); }
 }
 
 void DisplayDriver::render(const laveggio::SensorReading readings[laveggio::kChannelCount], const laveggio::WeightSnapshot &snapshot, const DisplayStatus &status) {
   pollTouch();
-  if (enabled_ && !resetProgressActive_ && autoOffMs_ != 0 &&
+  if (resetProgressActive_) return;
+  if (enabled_ && autoOffMs_ != 0 &&
       millis() - lastInteractionMs_ >= autoOffMs_) {
     if (!autoOffSleeping_) {
       autoOffSleeping_ = true;
@@ -453,7 +459,7 @@ void DisplayDriver::render(const laveggio::SensorReading readings[laveggio::kCha
   const bool dimmed=dimSeconds_ && millis()-lastInteractionMs_>uint32_t(dimSeconds_)*1000;
   const uint16_t duty=enabled_?(dimmed?std::min<uint8_t>(brightness_,10):brightness_)*1023/100:0;
   ledcWrite(kLcdBacklight,duty);
-  if (!enabled_ || resetProgressActive_ || static_cast<int32_t>(networkInfoUntilMs_ - millis()) > 0) return;
+  if (!enabled_ || static_cast<int32_t>(networkInfoUntilMs_ - millis()) > 0) return;
   if (networkInfoUntilMs_ != 0) { networkInfoUntilMs_ = 0; pageDirty_ = true; }
   const uint32_t interval = page_ == 0 ? 120 : 850;
   if (!pageDirty_ && millis() - lastRenderMs_ < interval) return; lastRenderMs_ = millis();
@@ -559,6 +565,14 @@ void DisplayDriver::wakeFromAutoOff() {
   lastRenderMs_ = 0;
   lastWeightKg_ = UINT32_MAX;
   pageDirty_ = true;
+}
+
+void DisplayDriver::wakeForCriticalScreen() {
+  autoOffSleeping_ = false;
+  lastInteractionMs_ = millis();
+  command(0x29);
+  const uint16_t configuredDuty = brightness_ * 1023 / 100;
+  ledcWrite(kLcdBacklight, std::max<uint16_t>(configuredDuty, 650));
 }
 
 void DisplayDriver::configureBrightness(

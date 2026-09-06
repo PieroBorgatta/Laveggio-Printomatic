@@ -55,4 +55,4 @@ Riferimento: [documentazione ufficiale Waveshare](https://docs.waveshare.com/ESP
 
 ## Firmware 2.1
 
-Percentuale da curva LiPo approssimata, avviso basso livello con isteresi, luminosità e attenuazione configurabili. Il tasto batteria può chiudere la microSD e rilasciare POWER_HOLD dopo due secondi. Con USB presente può non spegnere fisicamente la scheda. Provare la sequenza sul dispositivo; resta una stima da tensione, senza misuratore di corrente.
+Percentuale da curva LiPo approssimata, avviso basso livello con isteresi, luminosità e attenuazione configurabili. Rilasciando il tasto batteria tra 2 e 10 secondi il firmware può chiudere la microSD e rilasciare POWER_HOLD; continuando fino a 10 secondi avvia invece il ripristino di fabbrica con conto alla rovescia visibile. Con USB presente può non spegnere fisicamente la scheda. Provare la sequenza sul dispositivo; resta una stima da tensione, senza misuratore di corrente.

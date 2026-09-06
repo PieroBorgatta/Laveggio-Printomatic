@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.1.1" src="https://img.shields.io/badge/firmware-2.1.1-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.1.2" src="https://img.shields.io/badge/firmware-2.1.2-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
   <img alt="Test 34 su 34" src="https://img.shields.io/badge/test-34%2F34_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
@@ -50,11 +50,17 @@ documentazione hardware.
 > fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
-> La versione 2.1.1 separa acquisizione e invio prioritario dalle funzioni accessorie,
+> La versione 2.1.2 separa acquisizione e invio prioritario dalle funzioni accessorie,
 > completa l'RTC offline e introduce ordine sensori e rilevazione sperimentale
 > della chiusura. Stabilizza inoltre il provisioning Wi-Fi da smartphone e aggiunge
 > lo spegnimento automatico del display. La funzione bascula parte disattivata e richiede prove sul
 > montaggio reale. Esiti e limiti del collaudo sono in [test-results](docs/test-results.md).
+
+## Novità 2.1.2
+
+- Il conto alla rovescia del ripristino riattiva sempre controller LCD e retroilluminazione, anche con display spento manualmente o per inattività.
+- Il ripristino di fabbrica a 10 secondi è disponibile sia con BOOT sia con il tasto alimentazione.
+- Sul tasto alimentazione, il rilascio tra 2 e 10 secondi conserva la funzione di spegnimento senza impedire il ripristino lungo.
 
 ## Novità 2.1.1
 
@@ -322,7 +328,7 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
-- [x] Test host `34/34`, browser mobile WebKit e build ESP32-S3 V2/V1 completati
+- [x] Test host `35/35`, browser mobile WebKit e build ESP32-S3 V2/V1 completati
 - [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
 - [ ] Collaudo completo del display, touch, due speaker, RTC in blackout, IMU sulla bascula e batteria
 - [ ] Calibrazione meccanica completa delle quattro manopole

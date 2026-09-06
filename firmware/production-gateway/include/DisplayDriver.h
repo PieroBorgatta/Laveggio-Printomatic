@@ -68,9 +68,9 @@ class DisplayDriver {
   );
   void nextPage();
   void previousPage();
-  void showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs);
+  void showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs, bool powerButton = false);
   void cancelFactoryResetProgress();
-  void showFactoryReset();
+  void showFactoryReset(bool powerButton = false, bool successful = true);
   void render(
     const laveggio::SensorReading readings[laveggio::kChannelCount],
     const laveggio::WeightSnapshot &snapshot,
@@ -117,6 +117,7 @@ class DisplayDriver {
   void drawPill(uint16_t x, uint16_t y, const char *text, uint16_t color);
   void pollTouch();
   void wakeFromAutoOff();
+  void wakeForCriticalScreen();
   bool beginTouch();
   bool readTouchPoint(uint16_t &x, uint16_t &y);
   bool touchProbe(uint8_t address);
