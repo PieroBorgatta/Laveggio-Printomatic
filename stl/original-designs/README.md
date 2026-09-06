@@ -20,6 +20,6 @@ pesa Laveggio Printomatic:
 Ogni supporto per un sensore AS5600 utilizza due inserti filettati a caldo
 M5 × 6 mm; per i quattro supporti sono stati impiegati otto inserti.
 
-I collegamenti MakerWorld verranno aggiunti dopo la pubblicazione dei modelli.
-La licenza dei modelli originali sarà dichiarata esplicitamente prima della
-loro distribuzione.
+Il progetto completo è disponibile su
+[MakerWorld · PesaLink](https://makerworld.com/it/models/3269009-pesalink#profileId-3706531).
+La licenza dei modelli originali è indicata nella relativa pagina MakerWorld.

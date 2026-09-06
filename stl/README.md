@@ -22,6 +22,9 @@ README e il file `LICENSE` presenti nella cartella specifica del modello.
 | Supporti AS5600 | Progetto originale | STL e progetto Bambu Studio disponibili |
 | Supporti magneti | Progetto originale | STL e progetto Bambu Studio disponibili |
 
+Il progetto completo è pubblicato su
+[MakerWorld · PesaLink](https://makerworld.com/it/models/3269009-pesalink#profileId-3706531).
+
 ## Timelapse di realizzazione
 
 - [Supporti per i sensori AS5600](../docs/videos/timelapse-supporti-sensori.mp4)

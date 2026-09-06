@@ -208,7 +208,8 @@ filettati a caldo M5 × 6 mm, per un totale di otto inserti.
 </p>
 
 I file pronti per la stampa, compreso il progetto Bambu Studio, sono raccolti
-in [`stl/original-designs`](stl/original-designs/).
+in [`stl/original-designs`](stl/original-designs/). Il progetto completo è
+disponibile anche su [MakerWorld](https://makerworld.com/it/models/3269009-pesalink#profileId-3706531).
 
 ### Timelapse della stampa 3D
 
