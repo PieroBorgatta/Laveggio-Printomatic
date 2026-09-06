@@ -1,5 +1,15 @@
 # Risultati delle prove
 
+## Firmware 2.1.3 — 6 settembre 2026
+
+- Ripristino di fabbrica rimosso completamente dal tasto alimentazione: PWR
+  gestisce soltanto lo spegnimento; BOOT resta l'unica sorgente del reset a 10 secondi.
+- Il conto alla rovescia e il risveglio forzato del display sono associati soltanto
+  a BOOT.
+- `35/35` test API del simulatore superati; build V1/V2 riuscite e artefatti OTA
+  firmati generati. RAM statica `59.036 / 327.680 byte` (`18,0%`), flash
+  applicazione `1.718.662 / 6.291.456 byte` (`27,3%`).
+
 ## Firmware 2.1.2 — 6 settembre 2026
 
 - Corretto il risveglio forzato del controller LCD e della retroilluminazione

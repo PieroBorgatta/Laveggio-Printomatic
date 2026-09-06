@@ -68,9 +68,9 @@ class DisplayDriver {
   );
   void nextPage();
   void previousPage();
-  void showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs, bool powerButton = false);
+  void showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs);
   void cancelFactoryResetProgress();
-  void showFactoryReset(bool powerButton = false, bool successful = true);
+  void showFactoryReset(bool successful = true);
   void render(
     const laveggio::SensorReading readings[laveggio::kChannelCount],
     const laveggio::WeightSnapshot &snapshot,

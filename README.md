@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.1.2" src="https://img.shields.io/badge/firmware-2.1.2-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.1.3" src="https://img.shields.io/badge/firmware-2.1.3-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 34 su 34" src="https://img.shields.io/badge/test-34%2F34_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 35 su 35" src="https://img.shields.io/badge/test-35%2F35_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -50,17 +50,17 @@ documentazione hardware.
 > fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
-> La versione 2.1.2 separa acquisizione e invio prioritario dalle funzioni accessorie,
+> La versione 2.1.3 separa acquisizione e invio prioritario dalle funzioni accessorie,
 > completa l'RTC offline e introduce ordine sensori e rilevazione sperimentale
 > della chiusura. Stabilizza inoltre il provisioning Wi-Fi da smartphone e aggiunge
 > lo spegnimento automatico del display. La funzione bascula parte disattivata e richiede prove sul
 > montaggio reale. Esiti e limiti del collaudo sono in [test-results](docs/test-results.md).
 
-## Novità 2.1.2
+## Novità 2.1.3
 
 - Il conto alla rovescia del ripristino riattiva sempre controller LCD e retroilluminazione, anche con display spento manualmente o per inattività.
-- Il ripristino di fabbrica a 10 secondi è disponibile sia con BOOT sia con il tasto alimentazione.
-- Sul tasto alimentazione, il rilascio tra 2 e 10 secondi conserva la funzione di spegnimento senza impedire il ripristino lungo.
+- Il ripristino di fabbrica a 10 secondi è disponibile esclusivamente con BOOT.
+- Il tasto alimentazione PWR gestisce esclusivamente lo spegnimento, senza conto alla rovescia né funzione di ripristino.
 
 ## Novità 2.1.1
 

@@ -137,10 +137,11 @@ un misuratore di corrente o autonomia. L'avviso di batteria bassa è regolabile
 e usa isteresi per evitare ripetizioni.
 
 Il tasto batteria richiede prima un rilascio. Se lo spegnimento è abilitato,
-rilasciandolo dopo almeno 2 e prima di 10 secondi il firmware chiude la microSD,
-spegne il display e rilascia POWER_HOLD. Continuando invece fino a 10 secondi
-viene eseguito il ripristino di fabbrica. Il conto alla rovescia forza la
-riattivazione del pannello anche se era spento manualmente o per inattività.
+tenendolo premuto per 2 secondi il firmware chiude la microSD, spegne il display
+e rilascia POWER_HOLD. PWR non esegue mai il ripristino di fabbrica.
+Il ripristino è disponibile esclusivamente tenendo premuto BOOT per 10 secondi;
+il suo conto alla rovescia forza la riattivazione del pannello anche se era
+spento manualmente o per inattività.
 Con USB collegata la scheda può restare alimentata dopo lo spegnimento; letture
 e invio continuano, mentre la SD resta chiusa fino al riavvio.
 

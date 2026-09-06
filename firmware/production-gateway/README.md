@@ -67,10 +67,10 @@ Artefatti principali:
 - `.pio/build/<profilo>/firmware.factory.bin`: prima installazione completa,
   da usare quando si passa dalla vecchia ESP32-C6 alla ESP32-S3.
 
-Misure della build `2.1.2` verificata il 6 settembre 2026 sui profili Waveshare V2/V1:
+Misure della build `2.1.3` verificata il 6 settembre 2026 sui profili Waveshare V2/V1:
 
 - RAM statica: `59.036 / 327.680 byte` (`18,0%`);
-- flash applicazione: `1.718.914 / 6.291.456 byte` (`27,3%`).
+- flash applicazione: `1.718.662 / 6.291.456 byte` (`27,3%`).
 
 Le due partizioni OTA occupano `0x600000` byte, cioè 6 MiB ciascuna, sulla flash
 da 16 MB. La partizione SPIFFS è stata rimossa perché gli asset web sono
@@ -155,12 +155,12 @@ ESP32-C6 non può trasformare o migrare l'hardware.
 La sequenza completa per il collaudo è in
 [`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).
 
-## Versione 2.1.2
+## Versione 2.1.3
 
 Il conto alla rovescia del ripristino forza la riattivazione del pannello anche
-quando il display è spento. BOOT e il tasto alimentazione possono entrambi
-eseguire il ripristino dopo 10 secondi; il tasto alimentazione conserva lo
-spegnimento quando viene rilasciato tra 2 e 10 secondi.
+quando il display è spento. Il ripristino è disponibile esclusivamente tenendo
+premuto BOOT per 10 secondi. Il tasto alimentazione PWR è dedicato soltanto allo
+spegnimento e non può cancellare la configurazione.
 
 ## Versione 2.1.1
 

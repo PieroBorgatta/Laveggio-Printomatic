@@ -30,9 +30,9 @@ confermare boot senza reset ciclici, modello corretto e partizioni riconosciute.
 - scorrere verticalmente le pagine con contenuto più lungo;
 - provare i cinque pulsanti touch nel footer;
 - spegnere e riaccendere il display dal portale e verificare la persistenza;
-- provare BOOT breve; con il display spento, tenere BOOT e poi il tasto
-  alimentazione solo in modo controllato per verificare il conto alla rovescia
-  del ripristino. Rilasciare prima dei 10 secondi per non cancellare la NVS;
+- provare BOOT breve; con il display spento, tenere BOOT per verificare il conto
+  alla rovescia del ripristino. Rilasciare prima dei 10 secondi per non cancellare
+  la NVS. Verificare separatamente che PWR gestisca soltanto lo spegnimento;
 
 ## Audio e pesata
 

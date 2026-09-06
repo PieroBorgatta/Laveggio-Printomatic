@@ -46,7 +46,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.1.2";
+constexpr char kFirmwareVersion[] = "2.1.3";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -192,8 +192,7 @@ uint32_t stationConnectedSinceMs = 0;
 uint32_t scheduledRestartMs = 0;
 uint32_t scheduledNetworkApplyMs = 0;
 uint32_t factoryResetPressedSinceMs = 0;
-enum class FactoryResetSource : uint8_t { None, Boot, BatteryPower };
-FactoryResetSource factoryResetSource = FactoryResetSource::None;
+bool factoryResetTriggered = false;
 uint32_t authBlockedUntilMs = 0;
 String csrfToken;
 String lastHeartbeatAckAt;
@@ -1227,24 +1226,20 @@ void printNetworkStatus() {
   );
 }
 
-void performFactoryReset(FactoryResetSource source) {
-  factoryResetSource = source;
-  const char *sourceLabel = source == FactoryResetSource::BatteryPower
-    ? "battery_power_button"
-    : "boot_button";
-  logSystem("warning", "factory_reset", String(sourceLabel) + "_held_ms=" + String(kFactoryResetHoldMs));
+void performFactoryReset() {
+  factoryResetTriggered = true;
+  logSystem("warning", "factory_reset", "boot_button_held_ms=" + String(kFactoryResetHoldMs));
   const bool resetOk = configStore.factoryReset();
-  Serial.printf("Factory reset: %s; release button to restart\n", resetOk ? "completed" : "failed");
-  display.showFactoryReset(source == FactoryResetSource::BatteryPower, resetOk);
+  Serial.printf("Factory reset: %s; release BOOT to restart\n", resetOk ? "completed" : "failed");
+  display.showFactoryReset(resetOk);
 }
 
 void checkFactoryResetButton(uint32_t now) {
   const bool pressed = digitalRead(kFactoryResetButtonPin) == LOW;
-  if (factoryResetSource == FactoryResetSource::BatteryPower) return;
   if (!pressed) {
     const uint32_t heldMs = factoryResetPressedSinceMs == 0 ? 0 : now - factoryResetPressedSinceMs;
     factoryResetPressedSinceMs = 0;
-    if (factoryResetSource == FactoryResetSource::None) {
+    if (!factoryResetTriggered) {
       if (heldMs >= kFactoryResetFeedbackDelayMs) display.cancelFactoryResetProgress();
       else if (heldMs >= kButtonDebounceMs) display.nextPage();
       return;
@@ -1253,17 +1248,17 @@ void checkFactoryResetButton(uint32_t now) {
     ESP.restart();
     return;
   }
-  if (factoryResetSource != FactoryResetSource::None) return;
+  if (factoryResetTriggered) return;
   if (factoryResetPressedSinceMs == 0) {
     factoryResetPressedSinceMs = now;
     return;
   }
   const uint32_t heldMs = now - factoryResetPressedSinceMs;
   if (heldMs >= kFactoryResetFeedbackDelayMs) {
-    display.showFactoryResetProgress(heldMs, kFactoryResetHoldMs, false);
+    display.showFactoryResetProgress(heldMs, kFactoryResetHoldMs);
   }
   if (heldMs < kFactoryResetHoldMs) return;
-  performFactoryReset(FactoryResetSource::Boot);
+  performFactoryReset();
 }
 
 bool checkBatteryPowerButton(uint32_t now) {
@@ -1272,29 +1267,16 @@ bool checkBatteryPowerButton(uint32_t now) {
     if (!pressed) batteryButtonReleased = true;
     return false;
   }
-  if (factoryResetSource == FactoryResetSource::Boot) return false;
+  if (factoryResetTriggered) return false;
   if (!pressed) {
-    const uint32_t heldMs = batteryButtonSince == 0 ? 0 : now - batteryButtonSince;
     batteryButtonSince = 0;
-    if (factoryResetSource == FactoryResetSource::BatteryPower) {
-      delay(150);
-      ESP.restart();
-      return false;
-    }
-    if (heldMs >= kFactoryResetFeedbackDelayMs) display.cancelFactoryResetProgress();
-    return configStore.get().shutdownButtonEnabled && heldMs >= kBatteryShutdownHoldMs;
-  }
-  if (factoryResetSource != FactoryResetSource::None) return false;
-  if (batteryButtonSince == 0) {
-    batteryButtonSince = now;
     return false;
   }
-  const uint32_t heldMs = now - batteryButtonSince;
-  if (heldMs >= kFactoryResetFeedbackDelayMs) {
-    display.showFactoryResetProgress(heldMs, kFactoryResetHoldMs, true);
+  if (batteryButtonSince == 0) {
+    batteryButtonSince = now;
   }
-  if (heldMs >= kFactoryResetHoldMs) performFactoryReset(FactoryResetSource::BatteryPower);
-  return false;
+  return configStore.get().shutdownButtonEnabled &&
+    now - batteryButtonSince >= kBatteryShutdownHoldMs;
 }
 
 void sendSecurityHeaders() {

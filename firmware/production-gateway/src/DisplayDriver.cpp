@@ -410,24 +410,24 @@ void DisplayDriver::showNetworkInfo(const String &ssid, const String &wifiPasswo
   if (!wifiPassword.isEmpty()) { drawText(20, 249, "PASSWORD WIFI", 1, kMuted, kSurfaceBlue); drawWrappedText(116, 249, wifiPassword, 1, kText, kSurfaceBlue); }
 }
 
-void DisplayDriver::showFactoryReset(bool powerButton, bool successful) {
+void DisplayDriver::showFactoryReset(bool successful) {
   resetProgressActive_ = true; networkInfoUntilMs_ = millis() + 3600000UL; wakeForCriticalScreen();
   fillRect(0, 0, kWidth, kHeight, kNavy); fillRect(0, 0, kWidth, 54, kRed); drawText(14, 17, "RIPRISTINO", 2, kWhite, kRed);
   fillCard(14, 92, 212, 110, kRedSurface); drawText(28, 112, "CONFIGURAZIONE", 2, kText, kRedSurface);
   drawText(28, 146, successful ? "AZZERATA" : "ERRORE", 3, kRed, kRedSurface);
-  drawText(28, 220, powerButton ? "RILASCIA PWR" : "RILASCIA BOOT", 2, kAmber, kNavy);
+  drawText(28, 220, "RILASCIA BOOT", 2, kAmber, kNavy);
   drawText(28, 248, "PER RIAVVIARE", 2, kMuted, kNavy);
 }
 
-void DisplayDriver::showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs, bool powerButton) {
+void DisplayDriver::showFactoryResetProgress(uint32_t elapsedMs, uint32_t totalMs) {
   if (totalMs == 0) return;
   const uint32_t now = millis(); if (resetProgressActive_ && now - lastResetProgressMs_ < 100) return; lastResetProgressMs_ = now;
   if (!resetProgressActive_) {
     resetProgressActive_ = true; networkInfoUntilMs_ = millis() + 3600000UL; wakeForCriticalScreen();
     fillRect(0, 0, kWidth, kHeight, kNavy); fillRect(0, 0, kWidth, 54, kAmber); drawText(14, 17, "RIPRISTINO", 2, kNavy, kAmber);
-    drawText(18, 82, powerButton ? "TASTO ALIMENTAZIONE" : "TIENI PREMUTO BOOT", 2, kText, kNavy);
-    drawText(18, 228, powerButton ? "RILASCIA DOPO 2 S" : "RILASCIA", 1, kMuted, kNavy);
-    drawText(18, 245, powerButton ? "PER SPEGNERE" : "PER ANNULLARE", 1, kMuted, kNavy);
+    drawText(18, 82, "TIENI PREMUTO BOOT", 2, kText, kNavy);
+    drawText(18, 228, "RILASCIA", 1, kMuted, kNavy);
+    drawText(18, 245, "PER ANNULLARE", 1, kMuted, kNavy);
   }
   elapsedMs = std::min(elapsedMs, totalMs); const uint16_t progressWidth = static_cast<uint16_t>((elapsedMs * 204ULL) / totalMs);
   fillCard(16, 172, 208, 28, kMuted); fillCard(18, 174, 204, 24, kSurface); if (progressWidth > 0) fillCard(18, 174, progressWidth, 24, kAmber);
