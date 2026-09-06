@@ -129,8 +129,9 @@ di completamento dopo una nuova chiusura riconosciuta.
 
 ## Display, audio e batteria
 
-Luminosità 5–100%, attenuazione dopo inattività (0 disabilita) e ripristino al
-touch. Gli interruttori display e speaker restano indipendenti. La percentuale
+Luminosità 5–100%, attenuazione dopo inattività (0 disabilita) e spegnimento
+completo opzionale dopo 1–1440 minuti. Il touch o BOOT riattivano il pannello
+senza fermare acquisizione, rete o invii. Gli interruttori display e speaker restano indipendenti. La percentuale
 batteria usa una curva approssimata LiPo: è ancora una stima da tensione, non
 un misuratore di corrente o autonomia. L'avviso di batteria bassa è regolabile
 e usa isteresi per evitare ripetizioni.

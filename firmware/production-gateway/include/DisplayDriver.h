@@ -47,7 +47,12 @@ class DisplayDriver {
  public:
   void begin();
   void setEnabled(bool enabled);
-  void configureBrightness(uint8_t percent, uint16_t dimSeconds);
+  void configureBrightness(
+    uint8_t percent,
+    uint16_t dimSeconds,
+    bool autoOffEnabled,
+    uint16_t autoOffMinutes
+  );
   void showBootSplash(uint32_t durationMs = 10000);
   bool enabled() const { return enabled_; }
   bool touchAvailable() const { return touchController_ != 0; }
@@ -86,6 +91,8 @@ class DisplayDriver {
   bool lastStable_ = false;
   uint8_t brightness_ = 65;
   uint16_t dimSeconds_ = 120;
+  uint32_t autoOffMs_ = 0;
+  bool autoOffSleeping_ = false;
   uint32_t lastInteractionMs_ = 0;
   uint8_t scrollRow_ = 0;
   uint8_t touchController_ = 0;
@@ -109,6 +116,7 @@ class DisplayDriver {
   void drawFooter();
   void drawPill(uint16_t x, uint16_t y, const char *text, uint16_t color);
   void pollTouch();
+  void wakeFromAutoOff();
   bool beginTouch();
   bool readTouchPoint(uint16_t &x, uint16_t &y);
   bool touchProbe(uint8_t address);

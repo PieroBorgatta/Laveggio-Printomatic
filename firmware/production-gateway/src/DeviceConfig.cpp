@@ -135,6 +135,8 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.calibrationRevision=preferences_.getUInt("cal_rev",0);
   config_.displayBrightness=preferences_.getUChar("brightness",65);
   config_.displayDimSeconds=preferences_.getUShort("dim_seconds",120);
+  config_.displayAutoOffEnabled=preferences_.getBool("display_autooff",false);
+  config_.displayAutoOffMinutes=preferences_.getUShort("display_off_min",15);
   config_.batteryLowPercent=preferences_.getUChar("battery_low",15);
   config_.shutdownButtonEnabled=preferences_.getBool("power_button",true);
   config_.closure.enabled=preferences_.getBool("closure_on",false);
@@ -253,6 +255,8 @@ bool ConfigStore::saveSettings() {
   preferences_.putBytes("sensor_order",config_.sensorOrder,sizeof(config_.sensorOrder));
   preferences_.putUChar("brightness",config_.displayBrightness);
   preferences_.putUShort("dim_seconds",config_.displayDimSeconds);
+  preferences_.putBool("display_autooff",config_.displayAutoOffEnabled);
+  preferences_.putUShort("display_off_min",config_.displayAutoOffMinutes);
   preferences_.putUChar("battery_low",config_.batteryLowPercent);
   preferences_.putBool("power_button",config_.shutdownButtonEnabled);
   preferences_.putBool("closure_on",config_.closure.enabled);
@@ -273,7 +277,10 @@ bool ConfigStore::saveReliabilitySettings() {
   blob.batteryLow = config_.batteryLowPercent;
   blob.shutdownButton = config_.shutdownButtonEnabled;
   blob.closure = config_.closure;
-  return preferences_.putBytes("reliability_v1", &blob, sizeof(blob)) == sizeof(blob);
+  const bool blobSaved = preferences_.putBytes("reliability_v1", &blob, sizeof(blob)) == sizeof(blob);
+  const bool autoOffSaved = preferences_.putBool("display_autooff", config_.displayAutoOffEnabled) > 0;
+  const bool autoOffMinutesSaved = preferences_.putUShort("display_off_min", config_.displayAutoOffMinutes) > 0;
+  return blobSaved && autoOffSaved && autoOffMinutesSaved;
 }
 
 bool ConfigStore::saveDisplayDefaultOn() {

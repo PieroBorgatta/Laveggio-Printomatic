@@ -64,6 +64,8 @@ struct DeviceConfig {
   bool calibrationChecksumValid = true;
   uint8_t displayBrightness = 65;
   uint16_t displayDimSeconds = 120;
+  bool displayAutoOffEnabled = false;
+  uint16_t displayAutoOffMinutes = 15;
   uint8_t batteryLowPercent = 15;
   bool shutdownButtonEnabled = true;
   laveggio::ClosureConfig closure;

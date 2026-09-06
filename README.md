@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.1.0" src="https://img.shields.io/badge/firmware-2.1.0-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.1.1" src="https://img.shields.io/badge/firmware-2.1.1-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 30 su 30" src="https://img.shields.io/badge/test-30%2F30_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 34 su 34" src="https://img.shields.io/badge/test-34%2F34_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -50,10 +50,19 @@ documentazione hardware.
 > fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
-> La versione 2.1.0 separa acquisizione e invio prioritario dalle funzioni accessorie,
+> La versione 2.1.1 separa acquisizione e invio prioritario dalle funzioni accessorie,
 > completa l'RTC offline e introduce ordine sensori e rilevazione sperimentale
-> della chiusura. La funzione bascula parte disattivata e richiede prove sul
+> della chiusura. Stabilizza inoltre il provisioning Wi-Fi da smartphone e aggiunge
+> lo spegnimento automatico del display. La funzione bascula parte disattivata e richiede prove sul
 > montaggio reale. Esiti e limiti del collaudo sono in [test-results](docs/test-results.md).
+
+## Novità 2.1.1
+
+- Il portale di prima configurazione resta attivo mentre il dispositivo prova la rete scelta, senza riavvio immediato.
+- Rilevamento captive portal per iPhone, Android e Windows; scansione iniziale più breve e nessun channel hopping durante l'uso dell'AP.
+- Spegnimento completo del display configurabile dopo un numero di minuti, con riattivazione tramite touch o BOOT.
+- Campi data dello storico contenuti correttamente nella larghezza disponibile su smartphone.
+- Riavvio manuale da interfaccia web verificato tramite test automatico.
 
 ## Novità 2.1.0
 
@@ -76,7 +85,7 @@ documentazione hardware.
 | **Autodiagnosi** | Test di sensori, microSD, batteria, touch, speaker, IMU, RTC, Wi-Fi, DNS, gestionale e heap; grafici 24 ore e contatori di errore |
 | **Audio** | Doppio tono asincrono su PCM5101 dopo il salvataggio SD di una nuova pesata; avviso distinto per errori, disabilitabile e persistente; volume 0–100% regolabile dal portale; il test web emette un singolo bip breve, azzera il DMA e disattiva fisicamente le linee I2S |
 | **Assistenza** | Pacchetto ZIP anonimizzato con stato, diagnostica, log e registro aggiornamenti |
-| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point di emergenza originale `LP-PW_casklogic-192_168_4_1` |
+| **Rete** | DHCP o IP statico, scansione Wi-Fi e access point captive stabile `LP-PW_casklogic-192_168_4_1` |
 | **Integrazione** | HTTPS/mTLS, MQTT TLS opzionale, heartbeat, eventi firmati HMAC-SHA256, metriche Prometheus e configurazione remota versionata |
 | **Aggiornamenti** | OTA firmato ECDSA-P256, doppia partizione, validazione al riavvio, rollback e registro degli esiti |
 
@@ -313,7 +322,7 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
-- [x] Test host `30/30`, browser Chromium e build firmate ESP32-S3 V2/V1 completati
+- [x] Test host `34/34`, browser mobile WebKit e build ESP32-S3 V2/V1 completati
 - [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
 - [ ] Collaudo completo del display, touch, due speaker, RTC in blackout, IMU sulla bascula e batteria
 - [ ] Calibrazione meccanica completa delle quattro manopole

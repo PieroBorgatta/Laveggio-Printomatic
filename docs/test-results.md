@@ -1,5 +1,31 @@
 # Risultati delle prove
 
+## Firmware 2.1.1 — 6 settembre 2026
+
+- `34/34` test API del simulatore superati, inclusi persistenza dello
+  spegnimento automatico, mantenimento del portale durante il provisioning,
+  presenza dei controlli nel portale e riavvio manuale.
+- Test C++ di `ScaleCore` e `ReliabilityCore` superati con
+  `-Wall -Wextra -Werror`.
+- Build PlatformIO V2 e V1 riuscite: RAM statica
+  `59.036 / 327.680 byte` (`18,0%`), flash applicazione
+  `1.718.506 / 6.291.456 byte` (`27,3%`). La chiave privata di firma non era
+  disponibile su questa macchina, quindi sono stati prodotti i binari USB ma
+  non nuovi artefatti `.signed.bin` per OTA.
+- Portale verificato con WebKit in emulazione iPhone a 393 px: documento senza
+  overflow (`393/393`), campi data larghi 337 px e contenuti entro il margine
+  destro a 366 px. Visibili anche controlli di spegnimento e riavvio.
+- Upload USB del profilo V2 su ESP32-S3 riuscito con verifica hash, senza
+  cancellare la NVS. Seriale: `firmware_version=2.1.1`, access point di recupero
+  attivo su `192.168.4.1`, touch CST328 rilevato via fallback, microSD montata,
+  IMU/RTC/batteria disponibili e intervallo acquisizione massimo 20 ms.
+- La NVS preesistente è rimasta intatta: SSID, IP statico, capacità batteria e
+  stato predefinito del display sono stati riletti dopo il flash.
+
+Il flusso captive è stato verificato a livello software e compilato sulla
+scheda; resta consigliata una prova completa con l'iPhone reale per osservare
+il comportamento specifico della versione iOS installata.
+
 ## Firmware 2.1.0 — 5 settembre 2026
 
 La versione integra le correzioni già pubblicate fino a `6837098` (2.0.5),

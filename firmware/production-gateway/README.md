@@ -13,7 +13,7 @@ non sono valide per transazioni commerciali o verifiche metrologiche legali.
 - scansione continua dei quattro sensori a 100 kHz;
 - calibrazione persistente delle dieci posizioni di ogni manopola;
 - distanza angolare circolare, tolleranza, isteresi e finestra di stabilità;
-- display ST7789 240×320 controllabile dal web, con cinque pagine a card, swipe orizzontale, scroll verticale, footer touch e fallback BOOT;
+- display ST7789 240×320 controllabile dal web, con luminosità, attenuazione e spegnimento automatico indipendenti, cinque pagine a card, swipe orizzontale, scroll verticale, footer touch e fallback BOOT;
 - touch con autodetect CST3530 per V2 e CST328 per V1;
 - doppio tono su speaker PCM5101 alla conferma della pesata, disabilitabile e persistente dal portale;
 - volume speaker persistente da 0 a 100%, applicato sia alla conferma sia alla prova audio manuale;
@@ -23,7 +23,7 @@ non sono valide per transazioni commerciali o verifiche metrologiche legali.
 - campione diagnostico dei quattro sensori registrato ogni minuto;
 - sincronizzazione NTP richiesta subito dopo il Wi-Fi e completata senza
   bloccare l'avvio o la lettura dei sensori;
-- Wi-Fi DHCP o statico, scansione reti e access point di recupero;
+- Wi-Fi DHCP o statico, scansione reti e access point captive di recupero che resta disponibile durante il provisioning;
 - autenticazione HTTP Basic, rate limit, CSRF e header browser restrittivi;
 - invio asincrono HTTPS e MQTT TLS opzionale verso il futuro backend CaskLogic;
 - firma HMAC-SHA256 delle pesate, endpoint Prometheus e configurazione remota
@@ -67,10 +67,10 @@ Artefatti principali:
 - `.pio/build/<profilo>/firmware.factory.bin`: prima installazione completa,
   da usare quando si passa dalla vecchia ESP32-C6 alla ESP32-S3.
 
-Misure della build `2.1.0` verificata il 5 settembre 2026 sui profili Waveshare V2/V1:
+Misure della build `2.1.1` verificata il 6 settembre 2026 sui profili Waveshare V2/V1:
 
-- RAM statica: `59.004 / 327.680 byte` (`18,0%`);
-- flash applicazione: `1.713.714 / 6.291.456 byte` (`27,2%`).
+- RAM statica: `59.036 / 327.680 byte` (`18,0%`);
+- flash applicazione: `1.718.506 / 6.291.456 byte` (`27,3%`).
 
 Le due partizioni OTA occupano `0x600000` byte, cioè 6 MiB ciascuna, sulla flash
 da 16 MB. La partizione SPIFFS è stata rimossa perché gli asset web sono
@@ -108,9 +108,12 @@ Se non trova credenziali Wi-Fi salvate, il dispositivo crea:
 - indirizzo `http://192.168.4.1`.
 
 Lo stesso access point viene attivato se la rete configurata non è raggiungibile.
+Il salvataggio delle credenziali non riavvia il dispositivo durante il provisioning:
+la connessione alla rete scelta viene provata mantenendo disponibile il portale.
 Il dispositivo continua a tentare la riconnessione e spegne automaticamente
-l'access point dopo 120 secondi consecutivi di connessione stabile alla rete
-principale. Durante il primo provisioning l'interfaccia è raggiungibile dalla
+l'access point soltanto dopo 120 secondi consecutivi di connessione stabile alla rete
+principale. Le sonde captive di iOS, Android e Windows vengono ricondotte al portale,
+così il telefono non deve interpretare l'AP come una rete da abbandonare. Durante il primo provisioning l'interfaccia è raggiungibile dalla
 rete creata dal dispositivo e richiede già l'utente `admin` e la password
 iniziale `casklogic`. Le stesse credenziali proteggono il portale
 dopo il salvataggio del Wi-Fi. La password non viene stampata sulla seriale e
@@ -152,11 +155,12 @@ ESP32-C6 non può trasformare o migrare l'hardware.
 La sequenza completa per il collaudo è in
 [`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).
 
-## Versione 2.1.0
+## Versione 2.1.1
 
 Acquisizione dedicata a 50 Hz, trasporti prioritari indipendenti, RTC UTC offline,
 calibrazioni versionate con CRC, riordino dei canali, diagnosi del rumore,
-conferme distinte di salvataggio/consegna e chiusura bascula sperimentale.
+conferme distinte di salvataggio/consegna, chiusura bascula sperimentale,
+provisioning Wi-Fi stabile e spegnimento automatico reale del display.
 La rilevazione è inizialmente disattivata. Parametri e prove:
 [guida 2.1](../../docs/reliability-2.1.md).
 

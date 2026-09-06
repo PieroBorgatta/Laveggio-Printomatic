@@ -270,6 +270,7 @@ void DisplayDriver::pollTouch() {
   const bool pressed = readTouchPoint(x, y);
   if (pressed) {
     lastInteractionMs_=now;
+    if (autoOffSleeping_) wakeFromAutoOff();
     if (!touchPressed_) { touchStartX_ = touchLastX_ = x; touchStartY_ = touchLastY_ = y; touchPressed_ = true; }
     else { touchLastX_ = x; touchLastY_ = y; }
     return;
@@ -369,18 +370,22 @@ void DisplayDriver::drawStatusRow(uint16_t y, const char *label, const String &v
 
 void DisplayDriver::setEnabled(bool enabled) {
   enabled_ = enabled;
-  if (enabled_) { page_ = 0; scrollRow_ = 0; pageDirty_ = true; command(0x29); ledcWrite(kLcdBacklight, 650); }
+  autoOffSleeping_ = false;
+  lastInteractionMs_ = millis();
+  if (enabled_) { page_ = 0; scrollRow_ = 0; pageDirty_ = true; command(0x29); ledcWrite(kLcdBacklight, brightness_ * 1023 / 100); }
   else { command(0x28); ledcWrite(kLcdBacklight, 0); }
 }
 
 void DisplayDriver::nextPage() {
   if (!enabled_ || resetProgressActive_) return;
+  if (autoOffSleeping_) { wakeFromAutoOff(); return; }
   page_ = (page_ + 1) % kPageCount; scrollRow_ = 0; networkInfoUntilMs_ = 0; lastRenderMs_ = 0;
   lastWeightKg_ = UINT32_MAX; pageDirty_ = true;
 }
 
 void DisplayDriver::previousPage() {
   if (!enabled_ || resetProgressActive_) return;
+  if (autoOffSleeping_) { wakeFromAutoOff(); return; }
   page_ = page_ == 0 ? kPageCount - 1 : page_ - 1; scrollRow_ = 0; networkInfoUntilMs_ = 0;
   lastRenderMs_ = 0; lastWeightKg_ = UINT32_MAX; pageDirty_ = true;
 }
@@ -436,6 +441,15 @@ void DisplayDriver::cancelFactoryResetProgress() {
 
 void DisplayDriver::render(const laveggio::SensorReading readings[laveggio::kChannelCount], const laveggio::WeightSnapshot &snapshot, const DisplayStatus &status) {
   pollTouch();
+  if (enabled_ && !resetProgressActive_ && autoOffMs_ != 0 &&
+      millis() - lastInteractionMs_ >= autoOffMs_) {
+    if (!autoOffSleeping_) {
+      autoOffSleeping_ = true;
+      ledcWrite(kLcdBacklight, 0);
+      command(0x28);
+    }
+    return;
+  }
   const bool dimmed=dimSeconds_ && millis()-lastInteractionMs_>uint32_t(dimSeconds_)*1000;
   const uint16_t duty=enabled_?(dimmed?std::min<uint8_t>(brightness_,10):brightness_)*1023/100:0;
   ledcWrite(kLcdBacklight,duty);
@@ -536,6 +550,26 @@ void DisplayDriver::drawServicesPage(const DisplayStatus &status) {
   drawFooter();
 }
 
-void DisplayDriver::configureBrightness(uint8_t percent,uint16_t dimSeconds) {
-  brightness_=constrain(percent,5,100); dimSeconds_=dimSeconds; lastInteractionMs_=millis();
+void DisplayDriver::wakeFromAutoOff() {
+  if (!enabled_ || !autoOffSleeping_) return;
+  autoOffSleeping_ = false;
+  lastInteractionMs_ = millis();
+  command(0x29);
+  ledcWrite(kLcdBacklight, brightness_ * 1023 / 100);
+  lastRenderMs_ = 0;
+  lastWeightKg_ = UINT32_MAX;
+  pageDirty_ = true;
+}
+
+void DisplayDriver::configureBrightness(
+  uint8_t percent,
+  uint16_t dimSeconds,
+  bool autoOffEnabled,
+  uint16_t autoOffMinutes
+) {
+  brightness_=constrain(percent,5,100);
+  dimSeconds_=dimSeconds;
+  autoOffMs_=autoOffEnabled ? uint32_t(autoOffMinutes) * 60000UL : 0;
+  lastInteractionMs_=millis();
+  if (autoOffSleeping_) wakeFromAutoOff();
 }

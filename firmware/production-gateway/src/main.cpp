@@ -46,7 +46,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.1.0";
+constexpr char kFirmwareVersion[] = "2.1.1";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -64,7 +64,7 @@ constexpr uint32_t kFactoryResetFeedbackDelayMs = 600;
 constexpr uint32_t kButtonDebounceMs = 40;
 constexpr uint32_t kSensorIntervalMs = 20;
 constexpr uint32_t kHealthIntervalMs = 250;
-constexpr uint32_t kReconnectIntervalMs = 15000;
+constexpr uint32_t kReconnectIntervalMs = 30000;
 constexpr uint32_t kRescueApShutdownDelayMs = 120000;
 constexpr uint32_t kDiagnosticLogIntervalMs = 60000;
 constexpr uint32_t kSdCheckIntervalMs = 900000;
@@ -189,6 +189,7 @@ uint32_t lastConfigSyncMs = 0;
 uint32_t lastRetentionMs = 0;
 uint32_t stationConnectedSinceMs = 0;
 uint32_t scheduledRestartMs = 0;
+uint32_t scheduledNetworkApplyMs = 0;
 uint32_t factoryResetPressedSinceMs = 0;
 bool factoryResetTriggered = false;
 uint32_t authBlockedUntilMs = 0;
@@ -1035,7 +1036,8 @@ void processHeartbeatResult() {
     "code=" + String(code) + " failures=" + String(heartbeatConsecutiveFailures)
   );
   if (!config.heartbeatWatchdogEnabled || config.heartbeatRestartSuppressed ||
-      heartbeatConsecutiveFailures < config.heartbeatFailureThreshold) return;
+      heartbeatConsecutiveFailures < config.heartbeatFailureThreshold ||
+      accessPointActive || WiFi.status() != WL_CONNECTED) return;
   config.heartbeatRestartSuppressed = true;
   configStore.saveHeartbeatRestartSuppressed();
   logSystem("error", "heartbeat_watchdog_restart", "failures=" + String(heartbeatConsecutiveFailures));
@@ -1064,7 +1066,13 @@ void startRescueAccessPoint() {
   if (accessPointActive) return;
   stationConnectedSinceMs = 0;
   WiFi.mode(WIFI_AP_STA);
-  accessPointActive = WiFi.softAP(kRescueSsid, kRescuePassword);
+  WiFi.setSleep(false);
+  WiFi.softAPConfig(
+    IPAddress(192, 168, 4, 1),
+    IPAddress(192, 168, 4, 1),
+    IPAddress(255, 255, 255, 0)
+  );
+  accessPointActive = WiFi.softAP(kRescueSsid, kRescuePassword, 6, false, 4);
   if (accessPointActive) {
     dnsServer.start(53, "*", WiFi.softAPIP());
     logSystem("warning", "rescue_ap_started", WiFi.softAPIP().toString());
@@ -1076,7 +1084,9 @@ void refreshWifiScanCache() {
   if (accessPointActive) return;
 
   WiFi.mode(WIFI_STA);
-  const int found = WiFi.scanNetworks(false, true);
+  // Una scansione breve prima di aprire il portale evita il channel hopping
+  // mentre il telefono e collegato all'access point di configurazione.
+  const int found = WiFi.scanNetworks(false, true, false, 120);
   if (found <= 0) {
     WiFi.scanDelete();
     return;
@@ -1141,6 +1151,9 @@ void maintainRescueAccessPoint(uint32_t now) {
 
 void connectNetwork() {
   const DeviceConfig &config = configStore.get();
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+  WiFi.setSleep(false);
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(config.hostname.c_str());
   if (config.wifiSsid.isEmpty()) {
@@ -1161,7 +1174,38 @@ void connectNetwork() {
     WiFi.disconnect(false, false);
     refreshWifiScanCache();
     startRescueAccessPoint();
+    lastReconnectMs = millis();
   }
+}
+
+void applyConfiguredNetworkFromPortal() {
+  scheduledNetworkApplyMs = 0;
+  if (!accessPointActive) return;
+  const DeviceConfig &config = configStore.get();
+  stationConnectedSinceMs = 0;
+  WiFi.disconnect(false, false);
+  WiFi.mode(WIFI_AP_STA);
+  if (config.wifiSsid.isEmpty()) {
+    logSystem("info", "wifi_configuration_cleared", "rescue_ap_preserved=true");
+    return;
+  }
+  if (!applyStaticNetworkConfig()) {
+    logSystem("error", "invalid_static_network");
+    return;
+  }
+  WiFi.setHostname(config.hostname.c_str());
+  WiFi.begin(config.wifiSsid.c_str(), config.wifiPassword.c_str());
+  lastReconnectMs = millis();
+  logSystem("info", "wifi_configuration_applying", "rescue_ap_preserved=true");
+}
+
+void redirectConnectivityProbeToPortal() {
+  webServer.sendHeader("Cache-Control", "no-store");
+  webServer.sendHeader(
+    "Location",
+    "http://" + (accessPointActive ? WiFi.softAPIP().toString() : WiFi.localIP().toString()) + "/"
+  );
+  webServer.send(302, "text/plain", "Apri il portale PesaLink");
 }
 
 void printNetworkStatus() {
@@ -1354,6 +1398,8 @@ String reliabilityStatusJson() {
 String reliabilitySettingsJson() {
   const auto &c=configStore.get(); JsonDocument doc;
   doc["display_brightness"]=c.displayBrightness; doc["display_dim_seconds"]=c.displayDimSeconds;
+  doc["display_auto_off_enabled"]=c.displayAutoOffEnabled;
+  doc["display_auto_off_minutes"]=c.displayAutoOffMinutes;
   doc["battery_low_percent"]=c.batteryLowPercent; doc["shutdown_button_enabled"]=c.shutdownButtonEnabled;
   doc["closure_enabled"]=c.closure.enabled; doc["closure_complete_weight"]=c.closure.completeWeight;
   doc["closure_threshold_g"]=c.closure.thresholdG; doc["closure_quiet_g"]=c.closure.quietG;
@@ -2149,6 +2195,20 @@ void registerWebRoutes() {
     );
   });
 
+  // Le sonde di iOS, Android e Windows devono vedere un captive portal vero:
+  // senza il redirect alcuni telefoni abbandonano l'AP perche non ha Internet.
+  const char *connectivityProbePaths[] = {
+    "/hotspot-detect.html",
+    "/library/test/success.html",
+    "/generate_204",
+    "/gen_204",
+    "/connecttest.txt",
+    "/ncsi.txt"
+  };
+  for (const char *path : connectivityProbePaths) {
+    webServer.on(path, HTTP_GET, [] { redirectConnectivityProbeToPortal(); });
+  }
+
   webServer.on("/api/status", HTTP_GET, [] {
     if (!authorized()) return;
     sendJson(buildStatusJson());
@@ -2316,11 +2376,13 @@ void registerWebRoutes() {
   });
   webServer.on("/api/settings/reliability",HTTP_POST,[] {
     if(!authorized()) return;
-    const char *required[]={"display_brightness","display_dim_seconds","battery_low_percent","shutdown_button_enabled","closure_enabled","closure_complete_weight","closure_threshold_g","closure_quiet_g","closure_quiet_ms","closure_timeout_ms","closure_cooldown_ms"};
+    const char *required[]={"display_brightness","display_dim_seconds","display_auto_off_enabled","display_auto_off_minutes","battery_low_percent","shutdown_button_enabled","closure_enabled","closure_complete_weight","closure_threshold_g","closure_quiet_g","closure_quiet_ms","closure_timeout_ms","closure_cooldown_ms"};
     for(const char *key:required) if(!webServer.hasArg(key)) { sendError(400,"Impostazioni incomplete"); return; }
     auto c=configStore.get();
     c.displayBrightness=constrain(webServer.arg("display_brightness").toInt(),5,100);
     c.displayDimSeconds=constrain(webServer.arg("display_dim_seconds").toInt(),0,3600);
+    c.displayAutoOffEnabled=parseBool(webServer.arg("display_auto_off_enabled"));
+    c.displayAutoOffMinutes=constrain(webServer.arg("display_auto_off_minutes").toInt(),1,1440);
     c.batteryLowPercent=constrain(webServer.arg("battery_low_percent").toInt(),5,50);
     c.shutdownButtonEnabled=parseBool(webServer.arg("shutdown_button_enabled"));
     c.closure.enabled=parseBool(webServer.arg("closure_enabled"));
@@ -2448,8 +2510,13 @@ void registerWebRoutes() {
     setenv("TZ",config.timezone.c_str(),1); tzset();
     requestTimeSynchronization();
     logSystem("info", "network_settings_saved");
-    sendJson("{\"ok\":true,\"restart_required\":true}");
-    scheduledRestartMs = millis() + 1800;
+    if (accessPointActive) {
+      sendJson("{\"ok\":true,\"restart_required\":false,\"portal_preserved\":true}");
+      scheduledNetworkApplyMs = millis() + 800;
+    } else {
+      sendJson("{\"ok\":true,\"restart_required\":true,\"portal_preserved\":false}");
+      scheduledRestartMs = millis() + 1800;
+    }
   });
 
   webServer.on("/api/settings/integration", HTTP_POST, [] {
@@ -2767,11 +2834,16 @@ void registerWebRoutes() {
   );
 
   webServer.onNotFound([] {
-    if (!authorized()) return;
     if (webServer.uri().startsWith("/api/")) {
+      if (!authorized()) return;
       sendError(404, "Endpoint non trovato");
       return;
     }
+    if (accessPointActive) {
+      redirectConnectivityProbeToPortal();
+      return;
+    }
+    if (!authorized()) return;
     sendSecurityHeaders();
     webServer.sendHeader("Location", "/");
     webServer.send(302, "text/plain", "");
@@ -2782,7 +2854,12 @@ void registerWebRoutes() {
 void refreshRuntimeConfiguration() {
   if(!runtimeReady) return;
   acquisition.configure(configStore.get()); delivery.configure(configStore.get(),bootId);
-  display.configureBrightness(configStore.get().displayBrightness,configStore.get().displayDimSeconds);
+  display.configureBrightness(
+    configStore.get().displayBrightness,
+    configStore.get().displayDimSeconds,
+    configStore.get().displayAutoOffEnabled,
+    configStore.get().displayAutoOffMinutes
+  );
 }
 
 void initializeIdentity() {
@@ -2919,7 +2996,12 @@ void setup() {
   display.setEnabled(true);
   display.showBootSplash(10000);
   display.setEnabled(displayOn);
-  display.configureBrightness(configStore.get().displayBrightness,configStore.get().displayDimSeconds);
+  display.configureBrightness(
+    configStore.get().displayBrightness,
+    configStore.get().displayDimSeconds,
+    configStore.get().displayAutoOffEnabled,
+    configStore.get().displayAutoOffMinutes
+  );
   speakerOn = configStore.get().speakerDefaultOn;
   speaker.begin();
   speaker.setEnabled(speakerOn);
@@ -3004,6 +3086,9 @@ void loop() {
   checkFactoryResetButton(now);
   dnsServer.processNextRequest();
   webServer.handleClient();
+  if (scheduledNetworkApplyMs != 0 && static_cast<int32_t>(now - scheduledNetworkApplyMs) >= 0) {
+    applyConfiguredNetworkFromPortal();
+  }
   maintainRescueAccessPoint(now);
   processHeartbeatResult();
   pollTimeSynchronization(now);
@@ -3098,8 +3183,19 @@ void loop() {
 
   if (WiFi.status() != WL_CONNECTED && now - lastReconnectMs >= kReconnectIntervalMs) {
     lastReconnectMs = now;
-    if (!configStore.get().wifiSsid.isEmpty()) WiFi.reconnect();
     if (!accessPointActive) startRescueAccessPoint();
+    const DeviceConfig &networkConfig = configStore.get();
+    if (!networkConfig.wifiSsid.isEmpty()) {
+      WiFi.disconnect(false, false);
+      WiFi.mode(accessPointActive ? WIFI_AP_STA : WIFI_STA);
+      if (!applyStaticNetworkConfig()) {
+        logSystem("error", "invalid_static_network");
+      } else {
+        WiFi.setHostname(networkConfig.hostname.c_str());
+        WiFi.begin(networkConfig.wifiSsid.c_str(), networkConfig.wifiPassword.c_str());
+        logSystem("info", "wifi_reconnect_started", "rescue_ap_preserved=" + boolJson(accessPointActive));
+      }
+    }
   }
 
   if (now - lastNetworkStatusMs >= kDiagnosticLogIntervalMs) {
