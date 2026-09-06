@@ -192,6 +192,24 @@ flowchart LR
 Ciascuno dei quattro supporti dei sensori AS5600 utilizza due inserti
 filettati a caldo M5 × 6 mm, per un totale di otto inserti.
 
+### Foto del prototipo
+
+<p align="center">
+  <img src="docs/assets/photos/pesalink-sistema-completo.png" width="48%" alt="Sistema CaskLogic PesaLink completo">
+  <img src="docs/assets/photos/pesalink-sistema-prospettiva.png" width="48%" alt="Sistema PesaLink in prospettiva">
+</p>
+<p align="center">
+  <img src="docs/assets/photos/pesalink-case-display-frontale.png" width="31%" alt="Case del display visto frontalmente">
+  <img src="docs/assets/photos/pesalink-case-display-vista-superiore.png" width="31%" alt="Case del display visto dall'alto">
+  <img src="docs/assets/photos/pesalink-case-display-posteriore.png" width="31%" alt="Case del display visto posteriormente">
+</p>
+<p align="center">
+  <img src="docs/assets/photos/pesalink-boccole-calamita.png" width="48%" alt="Boccole stampate per le calamite">
+</p>
+
+I file pronti per la stampa, compreso il progetto Bambu Studio, sono raccolti
+in [`stl/original-designs`](stl/original-designs/).
+
 ### Timelapse della stampa 3D
 
 - [Realizzazione dei supporti per i sensori AS5600](docs/videos/timelapse-supporti-sensori.mp4) — 16 s, MP4 720p
