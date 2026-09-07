@@ -46,7 +46,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.2.0";
+constexpr char kFirmwareVersion[] = "2.2.2";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -725,15 +725,21 @@ void reportHeartbeatResult(bool ok, int code) {
 
 bool queueOutbound(const String &url, const String &token, const String &body, bool heartbeat = false) {
   if (url.isEmpty() || outboundQueue == nullptr) return false;
-  OutboundMessage message{};
-  strlcpy(message.url, url.c_str(), sizeof(message.url));
-  strlcpy(message.token, token.c_str(), sizeof(message.token));
-  strlcpy(message.caCertificate, configStore.get().tlsCaCertificate.c_str(), sizeof(message.caCertificate));
-  strlcpy(message.clientCertificate, configStore.get().tlsClientCertificate.c_str(), sizeof(message.clientCertificate));
-  strlcpy(message.clientPrivateKey, configStore.get().tlsClientPrivateKey.c_str(), sizeof(message.clientPrivateKey));
-  strlcpy(message.body, body.c_str(), sizeof(message.body));
-  message.heartbeat = heartbeat;
-  return xQueueSend(outboundQueue, &message, 0) == pdTRUE;
+  // OutboundMessage supera 11 KiB: sullo stack del loop causava un panic al
+  // primo heartbeat HTTPS. Il job vive temporaneamente nell'heap e la coda ne
+  // copia il contenuto prima del rilascio.
+  auto *message = static_cast<OutboundMessage *>(calloc(1, sizeof(OutboundMessage)));
+  if (message == nullptr) return false;
+  strlcpy(message->url, url.c_str(), sizeof(message->url));
+  strlcpy(message->token, token.c_str(), sizeof(message->token));
+  strlcpy(message->caCertificate, configStore.get().tlsCaCertificate.c_str(), sizeof(message->caCertificate));
+  strlcpy(message->clientCertificate, configStore.get().tlsClientCertificate.c_str(), sizeof(message->clientCertificate));
+  strlcpy(message->clientPrivateKey, configStore.get().tlsClientPrivateKey.c_str(), sizeof(message->clientPrivateKey));
+  strlcpy(message->body, body.c_str(), sizeof(message->body));
+  message->heartbeat = heartbeat;
+  const bool queued = xQueueSend(outboundQueue, message, 0) == pdTRUE;
+  free(message);
+  return queued;
 }
 
 void integrationTask(void *) {
@@ -1150,6 +1156,34 @@ void maintainRescueAccessPoint(uint32_t now) {
   logSystem("info", "rescue_ap_stopped", "station_stable_ms=" + String(kRescueApShutdownDelayMs));
 }
 
+void beginConfiguredStation(const DeviceConfig &config) {
+  uint8_t strongestBssid[6] = {0};
+  int32_t strongestRssi = -1000;
+  int32_t strongestChannel = 0;
+  const int count = WiFi.scanNetworks(false, true);
+  for (int index = 0; index < count; ++index) {
+    if (WiFi.SSID(index) != config.wifiSsid || WiFi.RSSI(index) <= strongestRssi) continue;
+    const uint8_t *candidate = WiFi.BSSID(index);
+    if (candidate == nullptr) continue;
+    memcpy(strongestBssid, candidate, sizeof(strongestBssid));
+    strongestRssi = WiFi.RSSI(index);
+    strongestChannel = WiFi.channel(index);
+  }
+  WiFi.scanDelete();
+  if (strongestChannel > 0) {
+    logSystem("info", "wifi_strongest_ap_selected", "rssi=" + String(strongestRssi));
+    WiFi.begin(
+      config.wifiSsid.c_str(),
+      config.wifiPassword.c_str(),
+      strongestChannel,
+      strongestBssid,
+      true
+    );
+    return;
+  }
+  WiFi.begin(config.wifiSsid.c_str(), config.wifiPassword.c_str());
+}
+
 void connectNetwork() {
   const DeviceConfig &config = configStore.get();
   WiFi.persistent(false);
@@ -1163,7 +1197,7 @@ void connectNetwork() {
     return;
   }
   if (!applyStaticNetworkConfig()) logSystem("error", "invalid_static_network");
-  WiFi.begin(config.wifiSsid.c_str(), config.wifiPassword.c_str());
+  beginConfiguredStation(config);
   const uint32_t startedAt = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startedAt < 12000) delay(100);
   if (WiFi.status() == WL_CONNECTED) {
@@ -1195,7 +1229,7 @@ void applyConfiguredNetworkFromPortal() {
     return;
   }
   WiFi.setHostname(config.hostname.c_str());
-  WiFi.begin(config.wifiSsid.c_str(), config.wifiPassword.c_str());
+  beginConfiguredStation(config);
   lastReconnectMs = millis();
   logSystem("info", "wifi_configuration_applying", "rescue_ap_preserved=true");
 }
@@ -3209,7 +3243,7 @@ void loop() {
         logSystem("error", "invalid_static_network");
       } else {
         WiFi.setHostname(networkConfig.hostname.c_str());
-        WiFi.begin(networkConfig.wifiSsid.c_str(), networkConfig.wifiPassword.c_str());
+        beginConfiguredStation(networkConfig);
         logSystem("info", "wifi_reconnect_started", "rescue_ap_preserved=" + boolJson(accessPointActive));
       }
     }

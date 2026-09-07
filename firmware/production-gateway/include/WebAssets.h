@@ -11,7 +11,7 @@ inline constexpr char WEB_INDEX_HTML[] PROGMEM = R"PESALINK_WEB(<!doctype html>
   <meta name="theme-color" content="#0e1520">
   <title>CaskLogic PesaLink</title>
   <link rel="icon" href="/casklogicmark.png">
-  <link rel="stylesheet" href="/app.css?v=2.2.0">
+  <link rel="stylesheet" href="/app.css?v=2.2.2">
 </head>
 <body>
   <div class="app-shell">
@@ -275,7 +275,7 @@ inline constexpr char WEB_INDEX_HTML[] PROGMEM = R"PESALINK_WEB(<!doctype html>
       <div class="form-actions"><button class="button secondary" value="cancel">Annulla</button><button class="button danger" value="confirm">Conferma</button></div>
     </form>
   </dialog>
-  <script src="/app.js?v=2.2.0"></script>
+  <script src="/app.js?v=2.2.2"></script>
 </body>
 </html>
 )PESALINK_WEB";
