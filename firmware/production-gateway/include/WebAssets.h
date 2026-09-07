@@ -11,7 +11,7 @@ inline constexpr char WEB_INDEX_HTML[] PROGMEM = R"PESALINK_WEB(<!doctype html>
   <meta name="theme-color" content="#0e1520">
   <title>CaskLogic PesaLink</title>
   <link rel="icon" href="/casklogicmark.png">
-  <link rel="stylesheet" href="/app.css?v=2.1.3">
+  <link rel="stylesheet" href="/app.css?v=2.2.0">
 </head>
 <body>
   <div class="app-shell">
@@ -143,15 +143,27 @@ inline constexpr char WEB_INDEX_HTML[] PROGMEM = R"PESALINK_WEB(<!doctype html>
 
           <form class="panel form-panel" id="integration-form">
             <div class="panel-heading"><div><p class="eyebrow">CaskLogic</p><h2>Integrazione gestionale</h2></div><span class="state-pill neutral" id="integration-state">Non configurata</span></div>
-            <label><span>ID dispositivo</span><input name="device_id" autocomplete="username" required></label>
-            <label><span>Endpoint eventi</span><input name="backend_url" type="url" placeholder="https://gestionale/api/..."></label>
-            <label><span>Token dispositivo</span><input name="backend_token" type="password" autocomplete="new-password" placeholder="Lascia vuoto per non modificarlo"></label>
-            <label><span>Segreto HMAC pesate</span><input name="event_hmac_secret" type="password" autocomplete="new-password" minlength="32" placeholder="Lascia vuoto per non modificarlo"></label>
-            <label><span>Token endpoint metriche</span><input name="metrics_token" type="password" autocomplete="new-password" minlength="24" placeholder="Lascia vuoto per non modificarlo"></label>
-            <label><span>Certificato CA per HTTPS</span><textarea name="tls_ca_certificate" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
-            <label><span>Certificato client mTLS</span><textarea name="tls_client_certificate" rows="4" placeholder="Opzionale"></textarea></label>
-            <label><span>Chiave privata client mTLS</span><textarea name="tls_client_private_key" rows="4" placeholder="Lascia vuoto per non modificarla"></textarea></label>
-            <label><span>Endpoint notifiche</span><input name="notification_url" type="url" placeholder="Opzionale"></label>
+            <section class="setup-import-panel" aria-labelledby="setup-import-title">
+              <div><p class="eyebrow">Configurazione più semplice</p><h3 id="setup-import-title">Importa il file creato dal gestionale</h3></div>
+              <ol class="setup-steps">
+                <li><strong>1</strong><span>Nel gestionale apri <b>Amministrazione → Configurazione → PesaLink</b> e aggiungi questo lettore.</span></li>
+                <li><strong>2</strong><span>Scarica il file <b>Configurazione ESP32</b> mostrato una sola volta.</span></li>
+                <li><strong>3</strong><span>Importalo qui, verifica il riepilogo e premi <b>Salva integrazione</b>.</span></li>
+              </ol>
+              <label class="button secondary setup-file-button" for="integration-import">Importa configurazione CaskLogic</label>
+              <input id="integration-import" type="file" accept=".json,application/json" hidden>
+              <p class="setup-privacy">Il file resta nel browser locale. I valori vengono scritti sul dispositivo solo quando premi “Salva integrazione”.</p>
+              <p class="import-result" id="integration-import-result" aria-live="polite"></p>
+            </section>
+            <label><span>ID dispositivo · deve coincidere con CaskLogic</span><input name="device_id" autocomplete="username" placeholder="es. pesalink-62F2A0" required></label>
+            <label><span>Endpoint eventi HTTPS</span><input name="backend_url" type="url" placeholder="https://testa-coda.distilleriabeccaris.it/api/v1/scale-devices/events"></label>
+            <label><span>Token dispositivo · generato dal gestionale</span><input name="backend_token" type="password" autocomplete="new-password" placeholder="Importa il JSON oppure incolla il token"></label>
+            <label><span>Segreto HMAC pesate · generato dal gestionale</span><input name="event_hmac_secret" type="password" autocomplete="new-password" minlength="32" placeholder="Importa il JSON oppure incolla il segreto"></label>
+            <label><span>Token metriche · generato dal gestionale</span><input name="metrics_token" type="password" autocomplete="new-password" minlength="24" placeholder="Importa il JSON oppure incolla il token"></label>
+            <label><span>CA pubblica per verificare HTTPS</span><textarea name="tls_ca_certificate" rows="5" placeholder="Inclusa automaticamente nel JSON CaskLogic"></textarea></label>
+            <label><span>Certificato client mTLS · normalmente vuoto</span><textarea name="tls_client_certificate" rows="4" placeholder="Usare solo se il server richiede mTLS"></textarea></label>
+            <label><span>Chiave privata client mTLS · normalmente vuota</span><textarea name="tls_client_private_key" rows="4" placeholder="Usare solo insieme al certificato client mTLS"></textarea></label>
+            <label><span>Endpoint notifiche · non usato da CaskLogic</span><input name="notification_url" type="url" placeholder="Lascia vuoto"></label>
             <div class="ip-grid">
               <label><span>Stabilità ms</span><input name="stable_ms" type="number" min="100" max="5000"></label>
               <label><span>Heartbeat secondi</span><input name="heartbeat_seconds" type="number" min="5" max="3600"></label>
@@ -160,17 +172,17 @@ inline constexpr char WEB_INDEX_HTML[] PROGMEM = R"PESALINK_WEB(<!doctype html>
             <label><span>Errori heartbeat prima del riavvio</span><input name="heartbeat_failure_threshold" type="number" min="3" max="20"></label>
             <div class="form-section"><p class="eyebrow">Configurazione remota</p></div>
             <label class="check-row"><input name="config_sync_enabled" type="checkbox"><span><strong>Sincronizza dal gestionale</strong><small>Solo campi operativi in whitelist e versioni crescenti</small></span></label>
-            <label><span>Endpoint configurazione</span><input name="config_sync_url" type="url" placeholder="https://gestionale/api/.../config"></label>
+            <label><span>Endpoint configurazione HTTPS</span><input name="config_sync_url" type="url" placeholder="https://testa-coda.distilleriabeccaris.it/api/v1/scale-devices/config"></label>
             <label><span>Intervallo sincronizzazione secondi</span><input name="config_sync_seconds" type="number" min="60" max="86400"></label>
             <button class="button secondary" type="button" id="sync-config">Sincronizza adesso</button>
-            <div class="form-section"><p class="eyebrow">MQTT TLS opzionale</p></div>
-            <label class="check-row"><input name="mqtt_enabled" type="checkbox"><span><strong>Abilita MQTT</strong><small>Nessuna coda persistente: gli eventi non inviati non vengono riprovati</small></span></label>
+            <div class="form-section"><p class="eyebrow">MQTT/TLS opzionale · non serve per usare HTTPS</p></div>
+            <label class="check-row"><input name="mqtt_enabled" type="checkbox"><span><strong>Abilita MQTT</strong><small>Attivalo solo dopo aver configurato un broker. HTTPS resta il canale principale e conferma la ricezione.</small></span></label>
             <div class="ip-grid">
-              <label><span>Host broker</span><input name="mqtt_host" autocomplete="off" placeholder="mqtt.example.local"></label>
+              <label><span>Host broker · senza mqtt://</span><input name="mqtt_host" autocomplete="off" placeholder="es. broker.azienda.local"></label>
               <label><span>Porta TLS</span><input name="mqtt_port" type="number" min="1" max="65535"></label>
             </div>
-            <label><span>Utente MQTT</span><input name="mqtt_username" autocomplete="username"></label>
-            <label><span>Password MQTT</span><input name="mqtt_password" type="password" autocomplete="new-password" placeholder="Lascia vuoto per non modificarla"></label>
+            <label><span>Utente del broker MQTT</span><input name="mqtt_username" autocomplete="username" placeholder="Non è il token HTTPS"></label>
+            <label><span>Password del broker MQTT</span><input name="mqtt_password" type="password" autocomplete="new-password" placeholder="Può richiedere inserimento manuale"></label>
             <label><span>Topic base</span><input name="mqtt_base_topic" placeholder="casklogic/pesalink"></label>
             <label class="check-row"><input name="mqtt_commands_enabled" type="checkbox"><span><strong>Comandi MQTT controllati</strong><small>Solo display, diagnostica e sincronizzazione configurazione</small></span></label>
             <button class="button primary" type="submit">Salva integrazione</button>
@@ -263,7 +275,7 @@ inline constexpr char WEB_INDEX_HTML[] PROGMEM = R"PESALINK_WEB(<!doctype html>
       <div class="form-actions"><button class="button secondary" value="cancel">Annulla</button><button class="button danger" value="confirm">Conferma</button></div>
     </form>
   </dialog>
-  <script src="/app.js?v=2.1.3"></script>
+  <script src="/app.js?v=2.2.0"></script>
 </body>
 </html>
 )PESALINK_WEB";
@@ -296,6 +308,7 @@ inline constexpr char WEB_APP_CSS[] PROGMEM = R"PESALINK_WEB(:root{color-scheme:
 #sensor-order-form h3{font-size:14px;margin:0}#sensor-order-form p{font-size:12px;line-height:1.5}#sensor-order-fields select{width:100%;min-width:0;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);padding:9px;font:inherit;font-size:12px}
 .audio-test{width:100%;min-height:54px;margin-top:10px;flex-direction:column;gap:3px;background:var(--blue-2);color:#fff;border-color:var(--blue-2)}.audio-test:hover{background:var(--blue)}.audio-test small{font-size:10px;font-weight:600;color:#dbe6ef}.audio-test:disabled{opacity:.55;cursor:wait}
 .volume-control{margin-top:10px;border:1px solid rgba(255,255,255,.16);border-radius:8px;background:rgba(14,21,32,.22);padding:12px 15px;display:grid;grid-template-columns:1fr auto;gap:8px 14px;align-items:center}.volume-control strong,.volume-control small{display:block}.volume-control strong{font-size:14px}.volume-control small{font-size:11px;color:#b9cbd7;margin-top:3px}.volume-value{font-size:12px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}.volume-control input{grid-column:1/-1;width:100%;height:18px;margin:0;accent-color:#7fa3ae;cursor:pointer}
+.setup-import-panel{border:1px solid #a8c8d8;border-radius:8px;background:#f1f8fb;padding:15px;display:grid;gap:12px}.setup-import-panel h3{font-size:15px;margin:0}.setup-steps{display:grid;gap:8px;margin:0;padding:0;list-style:none}.setup-steps li{display:grid;grid-template-columns:25px minmax(0,1fr);gap:8px;align-items:start;color:var(--muted);font-size:11px;line-height:1.5}.setup-steps li>strong{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--blue-2);color:#fff;font-size:11px}.setup-file-button{width:max-content}.setup-privacy,.import-result{margin:0;font-size:10px;line-height:1.5;color:var(--faint)}.import-result:empty{display:none}.import-result{border-radius:5px;padding:8px 10px;font-weight:700}.import-result.success{background:#e7f5ed;color:#217046}.import-result.error{background:#fceaea;color:#9f3535}.dark .setup-import-panel{background:#1b3042;border-color:#4d748d}@media(max-width:470px){.setup-file-button{width:100%}}
 )PESALINK_WEB";
 inline constexpr char WEB_APP_JS[] PROGMEM = R"PESALINK_WEB(const state={status:null,settings:null,calibration:null,history:[],diagnostics:null,daily:[],updates:[],channel:0,poll:null,historySort:'captured_at',historyDirection:'desc'};
 const $=(selector,root=document)=>root.querySelector(selector);
@@ -330,6 +343,40 @@ function populateForms(){if(!state.settings)return;const cfg=state.settings;cons
 function valuesFrom(form,names){return Object.fromEntries(names.map(name=>[name,form[name]?.type==='checkbox'?(form[name].checked?'true':'false'):form[name]?.value||'']))}
 async function saveForm(path,values,message){await api(path,{method:'POST',body:formBody(values)});toast(message);state.settings=await api('/api/settings');populateForms()}
 function toggleStaticFields(){const useDhcp=$('#network-form').network_mode.value==='dhcp';const fields=$('#static-fields');fields.hidden=useDhcp;$$('#static-fields input').forEach(input=>input.disabled=useDhcp)}
+
+function validateIntegrationBundle(bundle){
+  if(!bundle||bundle.profile!=='casklogic-pesalink'||Number(bundle.schema_version)!==1)throw new Error('Il file non è una configurazione CaskLogic PesaLink compatibile.');
+  const required=['device_id','backend_url','backend_token','event_hmac_secret','metrics_token','tls_ca_certificate'];
+  const missing=required.filter(key=>!String(bundle[key]??'').trim());
+  if(missing.length)throw new Error(`Nel file mancano: ${missing.join(', ')}.`);
+  if(!String(bundle.backend_url).startsWith('https://'))throw new Error('L’endpoint eventi deve iniziare con https://.');
+  if(String(bundle.event_hmac_secret).length<32)throw new Error('Il segreto HMAC nel file è troppo corto.');
+  if(String(bundle.metrics_token).length<24)throw new Error('Il token metriche nel file è troppo corto.');
+  if(bundle.config_sync_enabled&&!String(bundle.config_sync_url||'').startsWith('https://'))throw new Error('L’endpoint configurazione deve iniziare con https://.');
+}
+function populateIntegrationBundle(bundle){
+  validateIntegrationBundle(bundle);
+  const form=$('#integration-form');
+  const strings=['device_id','backend_url','backend_token','event_hmac_secret','metrics_token','tls_ca_certificate','tls_client_certificate','tls_client_private_key','notification_url','stable_ms','heartbeat_seconds','heartbeat_failure_threshold','config_sync_url','config_sync_seconds','mqtt_host','mqtt_port','mqtt_username','mqtt_password','mqtt_base_topic'];
+  const booleans=['heartbeat_watchdog_enabled','config_sync_enabled','mqtt_enabled','mqtt_commands_enabled'];
+  strings.forEach(key=>{if(form[key]&&bundle[key]!=null)form[key].value=String(bundle[key])});
+  booleans.forEach(key=>{if(form[key])form[key].checked=Boolean(bundle[key])});
+  const transports=[bundle.backend_url?'HTTPS':'',bundle.mqtt_enabled?'MQTT/TLS':''].filter(Boolean).join(' + ');
+  const result=$('#integration-import-result');
+  result.className='import-result success';
+  result.textContent=`Configurazione caricata per ${bundle.device_id}. Trasporto: ${transports}. Ora premi “Salva integrazione”.`;
+}
+async function importIntegrationBundle(file){
+  const result=$('#integration-import-result');
+  try{
+    populateIntegrationBundle(JSON.parse(await file.text()));
+    toast('Configurazione CaskLogic caricata: premi Salva integrazione');
+  }catch(error){
+    result.className='import-result error';
+    result.textContent=error instanceof Error?error.message:'File di configurazione non valido.';
+    toast(result.textContent,true);
+  }
+}
 
 function renderDetailList(element,entries){if(element.children.length!==entries.length)element.innerHTML=entries.map(([term],index)=>`<div data-detail="${index}"><dt>${escapeHtml(term)}</dt><dd></dd></div>`).join('');entries.forEach(([,value],index)=>setText(element.querySelector(`[data-detail="${index}"] dd`),value))}
 function renderSystemDetails(){const data=state.status;if(!data)return;const battery=data.power.battery_present?`${data.power.battery_percent}% · ${data.power.battery_voltage_mv} mV`:'Non collegata';const heartbeat=data.integration.heartbeat_last_ack_at?formatDate(data.integration.heartbeat_last_ack_at):'Nessuna risposta';const board=data.board||{};const entries=[['Firmware',data.firmware_version],['Scheda',board.model||'--'],['Profilo hardware',board.revision_profile||'--'],['Touch',board.touch_available?board.touch_controller:'Non rilevato'],['Speaker',data.speaker_ready?(data.speaker_on?'Attivo':'Disabilitato'):'Non inizializzato'],['IMU',board.imu_available?'QMI8658 operativa':'Non rilevata'],['RTC',board.rtc_available?(board.rtc_valid?board.rtc_datetime:'Da sincronizzare'):'Non rilevato'],['ID avvio',data.boot_id],['Avviato il',data.booted_at?formatDate(data.booted_at):'Ora non sincronizzata'],['Uptime',formatDuration(data.uptime_seconds)],['Heap libero',formatBytes(data.free_heap)],['Ultimo reset',data.reset_reason],['Ora dispositivo',data.device_time?`${formatDate(data.device_time)} · ${data.reliability?.time_source||'rete'}`:'Ora non disponibile'],['MicroSD',data.storage.ready?(data.storage.health_ok?'Montata e verificata':'Montata con avvisi'):'Assente'],['Alimentazione',data.power.source_label],['Batteria',battery],['Heartbeat ACK',heartbeat],['Errori heartbeat',data.integration.heartbeat_failures],['MQTT',data.integration.mqtt_enabled?(data.integration.mqtt_connected?'Connesso':'Disconnesso'):'Disattivato'],['Config gestionale',`Versione ${data.integration.config_version}`]];renderDetailList($('#system-details'),entries);const portalAuth=data.security.portal_auth==='basic'?'Basic + rate limit':'Digest + rate limit';const security=[['Accesso portale',portalAuth],['Credenziali',data.security.default_credentials_active?'Predefinite':'Personalizzate'],['Richieste','Token CSRF'],['Portale HTTPS',data.security.portal_https?'Attivo':'HTTP su rete locale'],['Gestionale',data.integration.tls_verified?'HTTPS verificato':'Non configurato'],['Firma pesate',data.integration.hmac_enabled?'HMAC-SHA256 attiva':'Da configurare'],['Firmware OTA',data.security.ota_signature_required?'ECDSA obbligatoria':'Non protetto'],['Rollback',data.security.ota_rollback_enabled?'A/B attivo':'Non attivo'],['mTLS',data.integration.mtls_enabled?'Attivo':'Non configurato'],['VLAN','Gestita da SSID / AP'],['Watchdog',data.integration.watchdog_enabled?(data.integration.watchdog_suppressed?'Inibito fino a nuovo ACK':'Attivo'):'Disattivato'],['Sensore corrente','Non installato']];renderDetailList($('#security-details'),security)}
@@ -413,6 +460,7 @@ async function init(){
   $$('#network-form input[name="network_mode"]').forEach(input=>input.addEventListener('change',toggleStaticFields));
   $$('#static-fields input').forEach(input=>input.addEventListener('input',()=>{input.value=input.value.replaceAll(',','.').replace(/[^0-9.]/g,'')}));
   $('#network-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget;const values=valuesFrom(form,['wifi_ssid','wifi_password','static_ip','gateway','subnet','dns']);values.use_dhcp=form.network_mode.value==='dhcp'?'true':'false';try{const result=await api('/api/settings/network',{method:'POST',body:formBody(values)});toast(result.portal_preserved?'Rete salvata; il portale resta disponibile durante la connessione':'Rete salvata; dopo il riavvio controlla l’indirizzo sul display');state.settings=await api('/api/settings');populateForms()}catch(error){toast(error.message,true)}});
+  $('#integration-import').addEventListener('change',event=>{const file=event.target.files[0];if(file)importIntegrationBundle(file).finally(()=>{event.target.value=''})});
   $('#integration-form').addEventListener('submit',async event=>{event.preventDefault();try{await saveForm('/api/settings/integration',valuesFrom(event.currentTarget,['device_id','backend_url','backend_token','event_hmac_secret','metrics_token','tls_ca_certificate','tls_client_certificate','tls_client_private_key','notification_url','stable_ms','heartbeat_seconds','heartbeat_watchdog_enabled','heartbeat_failure_threshold','config_sync_enabled','config_sync_url','config_sync_seconds','mqtt_enabled','mqtt_host','mqtt_port','mqtt_username','mqtt_password','mqtt_base_topic','mqtt_commands_enabled']),'Integrazione salvata')}catch(error){toast(error.message,true)}});
   $('#system-form').addEventListener('submit',async event=>{event.preventDefault();try{await saveForm('/api/settings/system',valuesFrom(event.currentTarget,['hostname','ntp_server','timezone','admin_user','admin_password','display_default_on','speaker_default_on','power_sense_enabled','history_enabled','history_keep_forever','history_retention_days','history_file_max_mb','system_log_file_max_mb','battery_sense_enabled','battery_divider_milli','battery_min_mv','battery_max_mv','battery_capacity_mah']),'Impostazioni salvate')}catch(error){toast(error.message,true)}});
   $('#wifi-scan').addEventListener('click',async()=>{const target=$('#wifi-results');target.innerHTML='<span class="wifi-network">Ricerca...</span>';try{let result=await api('/api/wifi/scan');if(result.scanning){await new Promise(resolve=>setTimeout(resolve,2200));result=await api('/api/wifi/scan')}target.innerHTML=(result.networks||[]).map(network=>`<button class="wifi-network" data-ssid="${escapeHtml(network.ssid)}">${escapeHtml(network.ssid)} · ${Number(network.rssi)} dBm</button>`).join('')||'<span class="wifi-network">Nessuna rete</span>';$$('.wifi-network[data-ssid]').forEach(button=>button.addEventListener('click',()=>{$('#network-form').wifi_ssid.value=button.dataset.ssid}))}catch(error){toast(error.message,true)}});

@@ -32,6 +32,40 @@ function valuesFrom(form,names){return Object.fromEntries(names.map(name=>[name,
 async function saveForm(path,values,message){await api(path,{method:'POST',body:formBody(values)});toast(message);state.settings=await api('/api/settings');populateForms()}
 function toggleStaticFields(){const useDhcp=$('#network-form').network_mode.value==='dhcp';const fields=$('#static-fields');fields.hidden=useDhcp;$$('#static-fields input').forEach(input=>input.disabled=useDhcp)}
 
+function validateIntegrationBundle(bundle){
+  if(!bundle||bundle.profile!=='casklogic-pesalink'||Number(bundle.schema_version)!==1)throw new Error('Il file non è una configurazione CaskLogic PesaLink compatibile.');
+  const required=['device_id','backend_url','backend_token','event_hmac_secret','metrics_token','tls_ca_certificate'];
+  const missing=required.filter(key=>!String(bundle[key]??'').trim());
+  if(missing.length)throw new Error(`Nel file mancano: ${missing.join(', ')}.`);
+  if(!String(bundle.backend_url).startsWith('https://'))throw new Error('L’endpoint eventi deve iniziare con https://.');
+  if(String(bundle.event_hmac_secret).length<32)throw new Error('Il segreto HMAC nel file è troppo corto.');
+  if(String(bundle.metrics_token).length<24)throw new Error('Il token metriche nel file è troppo corto.');
+  if(bundle.config_sync_enabled&&!String(bundle.config_sync_url||'').startsWith('https://'))throw new Error('L’endpoint configurazione deve iniziare con https://.');
+}
+function populateIntegrationBundle(bundle){
+  validateIntegrationBundle(bundle);
+  const form=$('#integration-form');
+  const strings=['device_id','backend_url','backend_token','event_hmac_secret','metrics_token','tls_ca_certificate','tls_client_certificate','tls_client_private_key','notification_url','stable_ms','heartbeat_seconds','heartbeat_failure_threshold','config_sync_url','config_sync_seconds','mqtt_host','mqtt_port','mqtt_username','mqtt_password','mqtt_base_topic'];
+  const booleans=['heartbeat_watchdog_enabled','config_sync_enabled','mqtt_enabled','mqtt_commands_enabled'];
+  strings.forEach(key=>{if(form[key]&&bundle[key]!=null)form[key].value=String(bundle[key])});
+  booleans.forEach(key=>{if(form[key])form[key].checked=Boolean(bundle[key])});
+  const transports=[bundle.backend_url?'HTTPS':'',bundle.mqtt_enabled?'MQTT/TLS':''].filter(Boolean).join(' + ');
+  const result=$('#integration-import-result');
+  result.className='import-result success';
+  result.textContent=`Configurazione caricata per ${bundle.device_id}. Trasporto: ${transports}. Ora premi “Salva integrazione”.`;
+}
+async function importIntegrationBundle(file){
+  const result=$('#integration-import-result');
+  try{
+    populateIntegrationBundle(JSON.parse(await file.text()));
+    toast('Configurazione CaskLogic caricata: premi Salva integrazione');
+  }catch(error){
+    result.className='import-result error';
+    result.textContent=error instanceof Error?error.message:'File di configurazione non valido.';
+    toast(result.textContent,true);
+  }
+}
+
 function renderDetailList(element,entries){if(element.children.length!==entries.length)element.innerHTML=entries.map(([term],index)=>`<div data-detail="${index}"><dt>${escapeHtml(term)}</dt><dd></dd></div>`).join('');entries.forEach(([,value],index)=>setText(element.querySelector(`[data-detail="${index}"] dd`),value))}
 function renderSystemDetails(){const data=state.status;if(!data)return;const battery=data.power.battery_present?`${data.power.battery_percent}% · ${data.power.battery_voltage_mv} mV`:'Non collegata';const heartbeat=data.integration.heartbeat_last_ack_at?formatDate(data.integration.heartbeat_last_ack_at):'Nessuna risposta';const board=data.board||{};const entries=[['Firmware',data.firmware_version],['Scheda',board.model||'--'],['Profilo hardware',board.revision_profile||'--'],['Touch',board.touch_available?board.touch_controller:'Non rilevato'],['Speaker',data.speaker_ready?(data.speaker_on?'Attivo':'Disabilitato'):'Non inizializzato'],['IMU',board.imu_available?'QMI8658 operativa':'Non rilevata'],['RTC',board.rtc_available?(board.rtc_valid?board.rtc_datetime:'Da sincronizzare'):'Non rilevato'],['ID avvio',data.boot_id],['Avviato il',data.booted_at?formatDate(data.booted_at):'Ora non sincronizzata'],['Uptime',formatDuration(data.uptime_seconds)],['Heap libero',formatBytes(data.free_heap)],['Ultimo reset',data.reset_reason],['Ora dispositivo',data.device_time?`${formatDate(data.device_time)} · ${data.reliability?.time_source||'rete'}`:'Ora non disponibile'],['MicroSD',data.storage.ready?(data.storage.health_ok?'Montata e verificata':'Montata con avvisi'):'Assente'],['Alimentazione',data.power.source_label],['Batteria',battery],['Heartbeat ACK',heartbeat],['Errori heartbeat',data.integration.heartbeat_failures],['MQTT',data.integration.mqtt_enabled?(data.integration.mqtt_connected?'Connesso':'Disconnesso'):'Disattivato'],['Config gestionale',`Versione ${data.integration.config_version}`]];renderDetailList($('#system-details'),entries);const portalAuth=data.security.portal_auth==='basic'?'Basic + rate limit':'Digest + rate limit';const security=[['Accesso portale',portalAuth],['Credenziali',data.security.default_credentials_active?'Predefinite':'Personalizzate'],['Richieste','Token CSRF'],['Portale HTTPS',data.security.portal_https?'Attivo':'HTTP su rete locale'],['Gestionale',data.integration.tls_verified?'HTTPS verificato':'Non configurato'],['Firma pesate',data.integration.hmac_enabled?'HMAC-SHA256 attiva':'Da configurare'],['Firmware OTA',data.security.ota_signature_required?'ECDSA obbligatoria':'Non protetto'],['Rollback',data.security.ota_rollback_enabled?'A/B attivo':'Non attivo'],['mTLS',data.integration.mtls_enabled?'Attivo':'Non configurato'],['VLAN','Gestita da SSID / AP'],['Watchdog',data.integration.watchdog_enabled?(data.integration.watchdog_suppressed?'Inibito fino a nuovo ACK':'Attivo'):'Disattivato'],['Sensore corrente','Non installato']];renderDetailList($('#security-details'),security)}
 async function loadLog(){try{$('#system-log').textContent=await api('/api/logs')}catch(error){$('#system-log').textContent=error.message}}
@@ -114,6 +148,7 @@ async function init(){
   $$('#network-form input[name="network_mode"]').forEach(input=>input.addEventListener('change',toggleStaticFields));
   $$('#static-fields input').forEach(input=>input.addEventListener('input',()=>{input.value=input.value.replaceAll(',','.').replace(/[^0-9.]/g,'')}));
   $('#network-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget;const values=valuesFrom(form,['wifi_ssid','wifi_password','static_ip','gateway','subnet','dns']);values.use_dhcp=form.network_mode.value==='dhcp'?'true':'false';try{const result=await api('/api/settings/network',{method:'POST',body:formBody(values)});toast(result.portal_preserved?'Rete salvata; il portale resta disponibile durante la connessione':'Rete salvata; dopo il riavvio controlla l’indirizzo sul display');state.settings=await api('/api/settings');populateForms()}catch(error){toast(error.message,true)}});
+  $('#integration-import').addEventListener('change',event=>{const file=event.target.files[0];if(file)importIntegrationBundle(file).finally(()=>{event.target.value=''})});
   $('#integration-form').addEventListener('submit',async event=>{event.preventDefault();try{await saveForm('/api/settings/integration',valuesFrom(event.currentTarget,['device_id','backend_url','backend_token','event_hmac_secret','metrics_token','tls_ca_certificate','tls_client_certificate','tls_client_private_key','notification_url','stable_ms','heartbeat_seconds','heartbeat_watchdog_enabled','heartbeat_failure_threshold','config_sync_enabled','config_sync_url','config_sync_seconds','mqtt_enabled','mqtt_host','mqtt_port','mqtt_username','mqtt_password','mqtt_base_topic','mqtt_commands_enabled']),'Integrazione salvata')}catch(error){toast(error.message,true)}});
   $('#system-form').addEventListener('submit',async event=>{event.preventDefault();try{await saveForm('/api/settings/system',valuesFrom(event.currentTarget,['hostname','ntp_server','timezone','admin_user','admin_password','display_default_on','speaker_default_on','power_sense_enabled','history_enabled','history_keep_forever','history_retention_days','history_file_max_mb','system_log_file_max_mb','battery_sense_enabled','battery_divider_milli','battery_min_mv','battery_max_mv','battery_capacity_mah']),'Impostazioni salvate')}catch(error){toast(error.message,true)}});
   $('#wifi-scan').addEventListener('click',async()=>{const target=$('#wifi-results');target.innerHTML='<span class="wifi-network">Ricerca...</span>';try{let result=await api('/api/wifi/scan');if(result.scanning){await new Promise(resolve=>setTimeout(resolve,2200));result=await api('/api/wifi/scan')}target.innerHTML=(result.networks||[]).map(network=>`<button class="wifi-network" data-ssid="${escapeHtml(network.ssid)}">${escapeHtml(network.ssid)} · ${Number(network.rssi)} dBm</button>`).join('')||'<span class="wifi-network">Nessuna rete</span>';$$('.wifi-network[data-ssid]').forEach(button=>button.addEventListener('click',()=>{$('#network-form').wifi_ssid.value=button.dataset.ssid}))}catch(error){toast(error.message,true)}});

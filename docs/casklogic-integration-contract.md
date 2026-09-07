@@ -1,7 +1,32 @@
 # Contratto CaskLogic PesaLink con Testa&Coda
 
-Questo documento descrive il lato gestionale da implementare in un intervento
-separato. Il repository CaskLogic non è stato modificato.
+Questo documento descrive il contratto implementato tra il firmware PesaLink e
+il gestionale CaskLogic.
+
+## Configurazione rapida consigliata
+
+1. Nel gestionale aprire **Amministrazione → Configurazione → PesaLink**.
+2. Abilitare PesaLink e **Ricezione HTTPS**, quindi aggiungere il lettore usando
+   l'ID mostrato nel portale ESP32.
+3. Nella finestra delle credenziali scaricare **Configurazione ESP32**. Il file
+   contiene endpoint, token, segreto HMAC e la CA pubblica necessaria a
+   verificare il server; non contiene la chiave privata della CA.
+4. Nel portale locale del lettore aprire **Rete e gestionale**, premere
+   **Importa configurazione CaskLogic**, scegliere il file e infine premere
+   **Salva integrazione**.
+
+Gli endpoint di produzione sono:
+
+```text
+Eventi:        https://testa-coda.distilleriabeccaris.it/api/v1/scale-devices/events
+Configurazione:https://testa-coda.distilleriabeccaris.it/api/v1/scale-devices/config
+```
+
+HTTPS è sufficiente per invio, ricevuta applicativa e sincronizzazione della
+configurazione. MQTT/TLS è un canale opzionale per stato realtime e comandi:
+richiede un broker configurato e credenziali del broker distinte dal token
+HTTPS. Se la password MQTT non compare nel file, va inserita manualmente nel
+portale ESP32.
 
 ## Endpoint dispositivo
 

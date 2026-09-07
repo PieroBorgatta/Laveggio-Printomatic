@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0e1520">
   <title>CaskLogic PesaLink</title>
   <link rel="icon" href="/casklogicmark.png">
-  <link rel="stylesheet" href="/app.css?v=2.1.3">
+  <link rel="stylesheet" href="/app.css?v=2.2.0">
 </head>
 <body>
   <div class="app-shell">
@@ -138,15 +138,27 @@
 
           <form class="panel form-panel" id="integration-form">
             <div class="panel-heading"><div><p class="eyebrow">CaskLogic</p><h2>Integrazione gestionale</h2></div><span class="state-pill neutral" id="integration-state">Non configurata</span></div>
-            <label><span>ID dispositivo</span><input name="device_id" autocomplete="username" required></label>
-            <label><span>Endpoint eventi</span><input name="backend_url" type="url" placeholder="https://gestionale/api/..."></label>
-            <label><span>Token dispositivo</span><input name="backend_token" type="password" autocomplete="new-password" placeholder="Lascia vuoto per non modificarlo"></label>
-            <label><span>Segreto HMAC pesate</span><input name="event_hmac_secret" type="password" autocomplete="new-password" minlength="32" placeholder="Lascia vuoto per non modificarlo"></label>
-            <label><span>Token endpoint metriche</span><input name="metrics_token" type="password" autocomplete="new-password" minlength="24" placeholder="Lascia vuoto per non modificarlo"></label>
-            <label><span>Certificato CA per HTTPS</span><textarea name="tls_ca_certificate" rows="5" placeholder="-----BEGIN CERTIFICATE-----"></textarea></label>
-            <label><span>Certificato client mTLS</span><textarea name="tls_client_certificate" rows="4" placeholder="Opzionale"></textarea></label>
-            <label><span>Chiave privata client mTLS</span><textarea name="tls_client_private_key" rows="4" placeholder="Lascia vuoto per non modificarla"></textarea></label>
-            <label><span>Endpoint notifiche</span><input name="notification_url" type="url" placeholder="Opzionale"></label>
+            <section class="setup-import-panel" aria-labelledby="setup-import-title">
+              <div><p class="eyebrow">Configurazione più semplice</p><h3 id="setup-import-title">Importa il file creato dal gestionale</h3></div>
+              <ol class="setup-steps">
+                <li><strong>1</strong><span>Nel gestionale apri <b>Amministrazione → Configurazione → PesaLink</b> e aggiungi questo lettore.</span></li>
+                <li><strong>2</strong><span>Scarica il file <b>Configurazione ESP32</b> mostrato una sola volta.</span></li>
+                <li><strong>3</strong><span>Importalo qui, verifica il riepilogo e premi <b>Salva integrazione</b>.</span></li>
+              </ol>
+              <label class="button secondary setup-file-button" for="integration-import">Importa configurazione CaskLogic</label>
+              <input id="integration-import" type="file" accept=".json,application/json" hidden>
+              <p class="setup-privacy">Il file resta nel browser locale. I valori vengono scritti sul dispositivo solo quando premi “Salva integrazione”.</p>
+              <p class="import-result" id="integration-import-result" aria-live="polite"></p>
+            </section>
+            <label><span>ID dispositivo · deve coincidere con CaskLogic</span><input name="device_id" autocomplete="username" placeholder="es. pesalink-62F2A0" required></label>
+            <label><span>Endpoint eventi HTTPS</span><input name="backend_url" type="url" placeholder="https://testa-coda.distilleriabeccaris.it/api/v1/scale-devices/events"></label>
+            <label><span>Token dispositivo · generato dal gestionale</span><input name="backend_token" type="password" autocomplete="new-password" placeholder="Importa il JSON oppure incolla il token"></label>
+            <label><span>Segreto HMAC pesate · generato dal gestionale</span><input name="event_hmac_secret" type="password" autocomplete="new-password" minlength="32" placeholder="Importa il JSON oppure incolla il segreto"></label>
+            <label><span>Token metriche · generato dal gestionale</span><input name="metrics_token" type="password" autocomplete="new-password" minlength="24" placeholder="Importa il JSON oppure incolla il token"></label>
+            <label><span>CA pubblica per verificare HTTPS</span><textarea name="tls_ca_certificate" rows="5" placeholder="Inclusa automaticamente nel JSON CaskLogic"></textarea></label>
+            <label><span>Certificato client mTLS · normalmente vuoto</span><textarea name="tls_client_certificate" rows="4" placeholder="Usare solo se il server richiede mTLS"></textarea></label>
+            <label><span>Chiave privata client mTLS · normalmente vuota</span><textarea name="tls_client_private_key" rows="4" placeholder="Usare solo insieme al certificato client mTLS"></textarea></label>
+            <label><span>Endpoint notifiche · non usato da CaskLogic</span><input name="notification_url" type="url" placeholder="Lascia vuoto"></label>
             <div class="ip-grid">
               <label><span>Stabilità ms</span><input name="stable_ms" type="number" min="100" max="5000"></label>
               <label><span>Heartbeat secondi</span><input name="heartbeat_seconds" type="number" min="5" max="3600"></label>
@@ -155,17 +167,17 @@
             <label><span>Errori heartbeat prima del riavvio</span><input name="heartbeat_failure_threshold" type="number" min="3" max="20"></label>
             <div class="form-section"><p class="eyebrow">Configurazione remota</p></div>
             <label class="check-row"><input name="config_sync_enabled" type="checkbox"><span><strong>Sincronizza dal gestionale</strong><small>Solo campi operativi in whitelist e versioni crescenti</small></span></label>
-            <label><span>Endpoint configurazione</span><input name="config_sync_url" type="url" placeholder="https://gestionale/api/.../config"></label>
+            <label><span>Endpoint configurazione HTTPS</span><input name="config_sync_url" type="url" placeholder="https://testa-coda.distilleriabeccaris.it/api/v1/scale-devices/config"></label>
             <label><span>Intervallo sincronizzazione secondi</span><input name="config_sync_seconds" type="number" min="60" max="86400"></label>
             <button class="button secondary" type="button" id="sync-config">Sincronizza adesso</button>
-            <div class="form-section"><p class="eyebrow">MQTT TLS opzionale</p></div>
-            <label class="check-row"><input name="mqtt_enabled" type="checkbox"><span><strong>Abilita MQTT</strong><small>Nessuna coda persistente: gli eventi non inviati non vengono riprovati</small></span></label>
+            <div class="form-section"><p class="eyebrow">MQTT/TLS opzionale · non serve per usare HTTPS</p></div>
+            <label class="check-row"><input name="mqtt_enabled" type="checkbox"><span><strong>Abilita MQTT</strong><small>Attivalo solo dopo aver configurato un broker. HTTPS resta il canale principale e conferma la ricezione.</small></span></label>
             <div class="ip-grid">
-              <label><span>Host broker</span><input name="mqtt_host" autocomplete="off" placeholder="mqtt.example.local"></label>
+              <label><span>Host broker · senza mqtt://</span><input name="mqtt_host" autocomplete="off" placeholder="es. broker.azienda.local"></label>
               <label><span>Porta TLS</span><input name="mqtt_port" type="number" min="1" max="65535"></label>
             </div>
-            <label><span>Utente MQTT</span><input name="mqtt_username" autocomplete="username"></label>
-            <label><span>Password MQTT</span><input name="mqtt_password" type="password" autocomplete="new-password" placeholder="Lascia vuoto per non modificarla"></label>
+            <label><span>Utente del broker MQTT</span><input name="mqtt_username" autocomplete="username" placeholder="Non è il token HTTPS"></label>
+            <label><span>Password del broker MQTT</span><input name="mqtt_password" type="password" autocomplete="new-password" placeholder="Può richiedere inserimento manuale"></label>
             <label><span>Topic base</span><input name="mqtt_base_topic" placeholder="casklogic/pesalink"></label>
             <label class="check-row"><input name="mqtt_commands_enabled" type="checkbox"><span><strong>Comandi MQTT controllati</strong><small>Solo display, diagnostica e sincronizzazione configurazione</small></span></label>
             <button class="button primary" type="submit">Salva integrazione</button>
@@ -258,6 +270,6 @@
       <div class="form-actions"><button class="button secondary" value="cancel">Annulla</button><button class="button danger" value="confirm">Conferma</button></div>
     </form>
   </dialog>
-  <script src="/app.js?v=2.1.3"></script>
+  <script src="/app.js?v=2.2.0"></script>
 </body>
 </html>
