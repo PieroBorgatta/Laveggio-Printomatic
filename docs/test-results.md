@@ -1,6 +1,6 @@
 # Risultati delle prove
 
-## Firmware 2.2.4 — 8 settembre 2026
+## Firmware 2.2.5 — 8 settembre 2026
 
 - `38/38` test API del simulatore superati, inclusi ordine cronologico dei
   campioni diagnostici e indicatori di uptime e temperatura nella pagina Sistema.

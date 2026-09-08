@@ -154,7 +154,7 @@ USB: un OTA della precedente ESP32-C6 non può trasformare o migrare l'hardware.
 Gli esiti e la sequenza eseguita sono in
 [`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).
 
-## Versione 2.2.4
+## Versione 2.2.5
 
 I grafici diagnostici sono ordinati cronologicamente. La pagina Sistema mostra
 uptime, istante di avvio e temperatura chip correnti. La rilevazione della
