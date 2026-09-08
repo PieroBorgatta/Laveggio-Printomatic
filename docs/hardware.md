@@ -13,6 +13,7 @@
 | Cavo dati Lapp LiYY 4 x 0,14 mm2, nero | 1 spezzone da 10 m | [Amazon.it - B0C69CJYZT](https://www.amazon.it/dp/B0C69CJYZT) |
 | Kit viti a macchina svasate nere M2 / M2,5 / M3, acciaio al carbonio | 1 kit da 500 | [Amazon.it - B0D1N4D5ZR](https://www.amazon.it/dp/B0D1N4D5ZR) |
 | Kit da 360 inserti filettati a caldo in ottone M2 / M2,5 / M3 / M4 / M5 / M6 | 1 kit | [Amazon.it - B0G1H5QBSF](https://www.amazon.it/dp/B0G1H5QBSF); utilizzati 8 inserti M5 x 6 mm |
+| Grani con punta M5 x 12 mm, acciaio inox A2, esagono incassato, DIN 914 / ISO 4027 | 8 (2 per supporto) | [Amazon.it - B0BZD8WXDQ](https://www.amazon.it/dp/B0BZD8WXDQ); confezione da 20 |
 | Speaker 8 ohm 2 W 2030 | 2 | Inclusi con la Waveshare |
 | Batteria LiPo 803040, 3,7 V, 1000 mAh, protetta | 1 | [Amazon.it - B0G5NM9YJ4](https://www.amazon.it/dp/B0G5NM9YJ4); 8 x 30 x 40 mm, connettore JST 1,25 mm, polarità da verificare |
 | SanDisk Extreme microSDXC 128 GB, A2 / U3 / V30 | 1 | [Amazon.it - B07FCMKK5X](https://www.amazon.it/dp/B07FCMKK5X); montata e verificata in lettura/scrittura |
@@ -73,9 +74,9 @@ segnale, frequenza, pull-up e affidabilità delle scansioni.
 ## Fissaggio dei supporti sensore
 
 Ciascuno dei quattro supporti dei sensori AS5600 utilizza due inserti filettati
-a caldo M5 x 6 mm, per un totale di otto inserti. Gli inserti sono stati
-installati a caldo nella plastica stampata e costituiscono i punti di fissaggio
-dei supporti.
+a caldo M5 x 6 mm e due grani con punta M5 x 12 mm. Per i quattro supporti sono
+stati impiegati otto inserti e otto grani. Gli inserti sono installati a caldo
+nella plastica stampata; i grani DIN 914 / ISO 4027 serrano i porta-sensori.
 
 ## Alimentazione
 

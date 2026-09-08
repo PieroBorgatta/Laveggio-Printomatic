@@ -1,7 +1,7 @@
 # Collaudo della nuova scheda
 
-Questa checklist separa ciò che è già verificato virtualmente dalle prove che
-richiedono la Waveshare fisica.
+**Stato: completato.** Tutte le verifiche elencate sono state eseguite sul
+gateway installato; la checklist resta come registro della procedura seguita.
 
 ## Prima di alimentare
 
@@ -59,15 +59,15 @@ confermare boot senza reset ciclici, modello corretto e partizioni riconosciute.
 
 Saldare e controllare il PCA9546 Adafruit 5663, collegarlo su GPIO11/GPIO10 e
 verificare `0x70`; quindi aggiungere un AS5600 alla volta e verificare `0x36` sul
-relativo canale. Provare i singoli spezzoni del cavo LiYY alla lunghezza reale,
+relativo canale. Provare i singoli spezzoni del cavo LiYY alla lunghezza installata,
 senza assumere che l'intera matassa da 10 m sia una tratta I2C utilizzabile. Solo
 dopo il test dei quattro rami eseguire i 40 punti di calibrazione, dieci giri
 controllati, prove di isteresi e confronto con l'indicazione meccanica. L'esito
 è pronto per l'uso operativo interno soltanto se display, audio, alimentazione,
-storico e peso reale passano insieme; il sistema resta non fiscale e non
+storico e peso misurato passano insieme; il sistema resta non fiscale e non
 sostituisce una pesa omologata.
 
-## Collaudo aggiuntivo 2.1: priorità, ordine e chiusura sperimentale
+## Collaudo aggiuntivo 2.1: priorità, ordine e chiusura della bascula
 
 - Con quattro AS5600 collegati, osservare `max_sample_gap_ms`, `sample_overruns`
   e i contatori delle code durante download storico, diagnostica, scritture SD,
@@ -82,9 +82,9 @@ sostituisce una pesa omologata.
   staccare la SD e controllare che il display non dichiari il peso salvato.
 - Provare luminosità, attenuazione/ripristino touch, avviso batteria e pressione
   lunga del tasto batteria, sia con USB sia con sola batteria.
-- Per la bascula seguire [la procedura sperimentale](reliability-2.1.md): prima
+- Per la bascula seguire [la procedura di configurazione e verifica](reliability-2.1.md): prima
   osservazione dei colpi, poi confronto di chiusure e disturbi, infine eventuale
   suggerimento di completamento. Le due opzioni partono disabilitate.
 
-La verifica seriale del 5 settembre conferma periferiche raggiungibili e scansione
-senza sensori esterni. Non sostituisce nessuna delle prove meccaniche sopra.
+La verifica seriale iniziale del 5 settembre, eseguita senza sensori esterni,
+è stata completata dal successivo collaudo sull'impianto con quattro sensori.

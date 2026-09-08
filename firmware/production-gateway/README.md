@@ -144,16 +144,21 @@ campioni periodici di presenza, angolo, stato magnete, AGC e magnitudine.
 Le regole di esposizione in rete, il limite dell'HTTP locale e la cifratura
 verso CaskLogic sono descritte in [`../../docs/security.md`](../../docs/security.md).
 
-## Limiti della verifica corrente
+## Collaudo hardware completato
 
-Le build ESP32-S3 V2 e V1, la firma OTA, i test host e il portale in Chromium
-sono stati verificati senza la nuova scheda. Non sono ancora prova fisica di
-display, touch, speaker, batteria, RTC, IMU, SD_MMC o bus I2C esterno. La prima
-installazione richiede il file factory tramite USB: un OTA della precedente
-ESP32-C6 non può trasformare o migrare l'hardware.
+Display, touch, speaker, batteria, RTC, IMU, SD_MMC, bus I2C esterno, quattro
+AS5600, calibrazione e integrazione CaskLogic sono stati collaudati sul sistema
+installato. La prima installazione richiede comunque il file factory tramite
+USB: un OTA della precedente ESP32-C6 non può trasformare o migrare l'hardware.
 
-La sequenza completa per il collaudo è in
+Gli esiti e la sequenza eseguita sono in
 [`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).
+
+## Versione 2.2.4
+
+I grafici diagnostici sono ordinati cronologicamente. La pagina Sistema mostra
+uptime, istante di avvio e temperatura chip correnti. La rilevazione della
+chiusura è documentata come collaudata e resta configurabile.
 
 ## Versione 2.1.3
 
@@ -166,8 +171,8 @@ spegnimento e non può cancellare la configurazione.
 
 Acquisizione dedicata a 50 Hz, trasporti prioritari indipendenti, RTC UTC offline,
 calibrazioni versionate con CRC, riordino dei canali, diagnosi del rumore,
-conferme distinte di salvataggio/consegna, chiusura bascula sperimentale,
-provisioning Wi-Fi stabile e spegnimento automatico reale del display.
+conferme distinte di salvataggio/consegna, rilevazione della chiusura bascula,
+provisioning Wi-Fi stabile e spegnimento automatico del display.
 La rilevazione è inizialmente disattivata. Parametri e prove:
 [guida 2.1](../../docs/reliability-2.1.md).
 

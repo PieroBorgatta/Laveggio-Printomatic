@@ -24,9 +24,11 @@ test('speaker test rejects repeated requests while the test sound is finishing',
 
 test('speaker volume is validated and exposed by settings and status',()=>withServer(async base=>{const saved=await post(`${base}/api/speaker/volume`,new URLSearchParams({volume:'35'}));assert.equal(saved.status,200);assert.equal((await saved.json()).volume,35);const settings=await (await fetch(`${base}/api/settings`)).json();const status=await (await fetch(`${base}/api/status`)).json();assert.equal(settings.speaker_volume_percent,35);assert.equal(status.speaker_volume_percent,35);assert.equal((await post(`${base}/api/speaker/volume`,new URLSearchParams({volume:'101'}))).status,400);assert.equal((await post(`${base}/api/speaker/volume`,new URLSearchParams({volume:'forte'}))).status,400)}));
 
-test('versioned web assets are never reused from an older firmware',()=>withServer(async base=>{const page=await (await fetch(`${base}/`)).text();assert.match(page,/app\.css\?v=2\.2\.2/);assert.match(page,/app\.js\?v=2\.2\.2/);assert.equal((await fetch(`${base}/app.js?v=2.2.2`)).headers.get('cache-control'),'no-store');assert.equal((await fetch(`${base}/app.css?v=2.2.2`)).headers.get('cache-control'),'no-store')}));
+test('versioned web assets are never reused from an older firmware',()=>withServer(async base=>{const page=await (await fetch(`${base}/`)).text();assert.match(page,/app\.css\?v=2\.2\.4/);assert.match(page,/app\.js\?v=2\.2\.4/);assert.equal((await fetch(`${base}/app.js?v=2.2.4`)).headers.get('cache-control'),'no-store');assert.equal((await fetch(`${base}/app.css?v=2.2.4`)).headers.get('cache-control'),'no-store')}));
 
-test('portal imports the guided CaskLogic setup bundle',()=>withServer(async base=>{const page=await (await fetch(base)).text();const app=await (await fetch(`${base}/app.js?v=2.2.2`)).text();assert.match(page,/id="integration-import"/);assert.match(page,/Importa configurazione CaskLogic/);assert.match(page,/testa-coda\.distilleriabeccaris\.it\/api\/v1\/scale-devices\/events/);assert.match(app,/casklogic-pesalink/);assert.match(app,/validateIntegrationBundle/);assert.match(app,/premi “Salva integrazione”/)}));
+test('portal imports the guided CaskLogic setup bundle',()=>withServer(async base=>{const page=await (await fetch(base)).text();const app=await (await fetch(`${base}/app.js?v=2.2.4`)).text();assert.match(page,/id="integration-import"/);assert.match(page,/Importa configurazione CaskLogic/);assert.match(page,/testa-coda\.distilleriabeccaris\.it\/api\/v1\/scale-devices\/events/);assert.match(app,/casklogic-pesalink/);assert.match(app,/validateIntegrationBundle/);assert.match(app,/premi “Salva integrazione”/)}));
+
+test('system page shows current uptime and chip temperature and charts sort by time',()=>withServer(async base=>{const page=await (await fetch(base)).text();const app=await (await fetch(`${base}/app.js?v=2.2.4`)).text();assert.match(page,/id="system-uptime"/);assert.match(page,/id="system-temperature"/);assert.match(app,/chip_temperature_c/);assert.match(app,/localeCompare/)}));
 
 test('history date fields and automatic display shutdown are exposed in the portal',()=>withServer(async base=>{const page=await (await fetch(`${base}/`)).text();assert.equal((page.match(/class="history-date"/g)||[]).length,2);assert.match(page,/name="display_auto_off_enabled"/);assert.match(page,/name="display_auto_off_minutes"/)}));
 
@@ -74,7 +76,7 @@ test('unknown API routes return a structured 404',()=>withServer(async base=>{co
 
 test('diagnostic log export contains sensor samples',()=>withServer(async base=>{const response=await fetch(`${base}/api/logs/export`);assert.equal(response.status,200);assert.match(response.headers.get('content-disposition'),/pesalink-log-completo/);const record=JSON.parse((await response.text()).trim());assert.equal(record.event,'sensor_diagnostics');assert.equal(record.sensors.length,4)}));
 
-test('experimental closure is opt-in, validates thresholds and retains settings on failure',()=>withServer(async base=>{
+test('closure detection is opt-in, validates thresholds and retains settings on failure',()=>withServer(async base=>{
  const before=await (await fetch(`${base}/api/settings/reliability`)).json();
  assert.equal(before.closure_enabled,false);assert.equal(before.closure_complete_weight,false);
  let response=await post(`${base}/api/settings/reliability`,new URLSearchParams({...before,closure_enabled:'true',closure_quiet_g:'0.7'}));assert.equal(response.status,400);

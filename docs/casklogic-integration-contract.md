@@ -184,7 +184,7 @@ canale fisico), `time_source` (`ntp`, `rtc`, `unavailable`), `time_valid`,
 avvio; un timestamp RTC può essere valido con `time_synchronized=false`.
 
 Con rilevazione bascula disabilitata il flusso ordinario non cambia. In sola
-osservazione i candidati restano locali. Se il completamento sperimentale è
+osservazione i candidati restano locali. Se il completamento della pesata è
 abilitato, una chiusura riconosciuta produce uno snapshot aggiuntivo anche a
 peso invariato; `weight_completed=true` non autorizza la persistenza automatica
  di lordo/tara né sostituisce la conferma dell'operatore.

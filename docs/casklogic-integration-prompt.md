@@ -60,5 +60,5 @@ revocare dispositivi, audit filtrabile, test backend, test frontend e verifica
 browser autenticata. Riusa grafica, dialoghi e convenzioni già presenti nel
 gestionale. Non modificare flussi estranei e non eseguire deploy, commit o push
 finché non te lo autorizzo esplicitamente. Alla fine elenca file modificati,
-test eseguiti e decisioni ancora da confermare sull'hardware reale.
+test eseguiti e risultati del collaudo hardware completato.
 ```

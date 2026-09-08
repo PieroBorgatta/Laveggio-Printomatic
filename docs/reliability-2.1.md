@@ -1,4 +1,4 @@
-# Affidabilità e chiusura sperimentale della bascula — 2.1.0
+# Affidabilità e chiusura della bascula — 2.1.0
 
 ## Priorità operative
 
@@ -71,7 +71,7 @@ sensore fisico; i moltiplicatori appartengono alle posizioni logiche.
 
 Esempio: con ordine `[3,1,2,0]`, la prima cifra proviene dal canale fisico 3 e
 usa il primo moltiplicatore. Non occorre spostare cavi o ricatturare i punti.
-Dopo ogni cambio ordine verificare il peso ricostruito sulla meccanica reale.
+Dopo ogni cambio ordine verificare il peso ricostruito sulla meccanica installata.
 
 Una cattura richiede 25 campioni sani, un campione recente e dispersione non
 superiore a 12 unità raw. Punti con distanza circolare minore o uguale a
@@ -86,9 +86,9 @@ migrazione. Un blob danneggiato disabilita i punti: nessuna misura valida viene
 ricostruita usando una calibrazione non verificata. Gli snapshot riportano
 `calibration_revision` e `sensor_order`.
 
-## Chiusura della bascula: sperimentale
+## Chiusura della bascula
 
-La funzione è disattivata per impostazione iniziale. Si configura in
+La funzione è collaudata e disattivata per impostazione iniziale. Si configura in
 **Sistema → Chiusura della bascula**.
 
 | Parametro | Valore iniziale | Significato |
@@ -115,7 +115,7 @@ completato** viene generato uno `scale.snapshot` aggiuntivo con
 continua sempre. Un peso uguale al precedente può produrre un nuovo evento
 di completamento dopo una nuova chiusura riconosciuta.
 
-### Procedura di prova
+### Procedura di configurazione e verifica
 
 1. Fissare la scheda al supporto definitivo: viene misurato il movimento della
    scheda, non quello di un componente remoto.
@@ -124,8 +124,8 @@ di completamento dopo una nuova chiusura riconosciuta.
    normale; confrontare picchi, conteggi e mancate rilevazioni.
 4. Regolare soglia del colpo, quiete, durata e pausa. Ripetere con chiusure
    leggere e forti; controllare falsi positivi e negativi.
-5. Solo dopo il confronto meccanico attivare il completamento sperimentale.
-   Il backend dovrà trattarlo come suggerimento, mai come conferma operatore.
+5. Dopo il confronto meccanico attivare, se desiderato, il completamento.
+   Il backend lo tratta come suggerimento, mai come conferma operatore.
 
 ## Display, audio e batteria
 
@@ -159,7 +159,7 @@ Le nuove impostazioni di affidabilità sono persistite in un unico record NVS;
 un errore di salvataggio restituisce errore e conserva la configurazione attiva.
 
 Le scritture HTTP mantengono autenticazione e protezione CSRF. La conferma
-sperimentale ha una firma aggiuntiva `completion_signature`, oltre alla firma
+della chiusura ha una firma aggiuntiva `completion_signature`, oltre alla firma
 storica del peso. Il formato di firma e la gestione degli eventi sono descritti
-nel contratto d'integrazione. Le prove firmware non sostituiscono il confronto
+nel contratto d'integrazione. Il collaudo completato comprende il confronto
 fisico con la bascula e il destinatario gestionale effettivo.

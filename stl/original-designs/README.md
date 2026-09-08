@@ -18,7 +18,10 @@ pesa Laveggio Printomatic:
 | [`boccola-calamita-v4.stl`](boccola-calamita-v4.stl) | Boccola per la calamita montata sulla manopola |
 
 Ogni supporto per un sensore AS5600 utilizza due inserti filettati a caldo
-M5 × 6 mm; per i quattro supporti sono stati impiegati otto inserti.
+M5 × 6 mm e due grani con punta M5 × 12 mm. Per i quattro supporti sono stati
+impiegati otto inserti e otto grani. I grani sono in acciaio inox A2 con
+esagono incassato, DIN 914 / ISO 4027
+([Amazon.it · B0BZD8WXDQ](https://www.amazon.it/dp/B0BZD8WXDQ)).
 
 Il progetto completo è disponibile su
 [MakerWorld · PesaLink](https://makerworld.com/it/models/3269009-pesalink#profileId-3706531).

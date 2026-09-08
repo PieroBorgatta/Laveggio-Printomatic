@@ -32,4 +32,7 @@ Il progetto completo è pubblicato su
 - [Scatola ESP32](../docs/videos/timelapse-scatola-esp32.mp4)
 
 Ogni supporto stampato per un sensore AS5600 utilizza due inserti filettati a
-caldo M5 × 6 mm. I quattro supporti richiedono quindi otto inserti complessivi.
+caldo M5 × 6 mm e due grani con punta M5 × 12 mm. I quattro supporti richiedono
+quindi otto inserti e otto grani complessivi. I grani in acciaio inox A2,
+DIN 914 / ISO 4027, sono disponibili nella
+[confezione da 20 utilizzata](https://www.amazon.it/dp/B0BZD8WXDQ).

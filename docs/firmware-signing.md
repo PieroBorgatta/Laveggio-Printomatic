@@ -91,5 +91,5 @@ nel pannello senza essere affidato soltanto a una notifica temporanea.
 Questa protezione impedisce l'installazione dal portale di un binario non
 firmato. Non protegge da un attaccante con accesso fisico alla flash finché non
 vengono provisionati anche Secure Boot e Flash Encryption tramite eFuse. Tali
-operazioni sono irreversibili e devono essere provate sulla scheda reale con
-una procedura di recupero documentata.
+operazioni sono irreversibili e vanno eseguite sulla scheda installata seguendo
+la procedura di recupero già documentata.

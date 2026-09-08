@@ -132,4 +132,4 @@ sostituiscono la cifratura del trasporto. Dettagli in
 
 ## Aggiornamento 2.1
 
-Il percorso di acquisizione e i trasporti pesate sono ora task distinti dalle funzioni accessorie. La calibrazione è versionata e protetta da CRC. Consultare [la guida 2.1](reliability-2.1.md) per code, stabilità dopo pause, RTC, ordine sensori e completamento sperimentale.
+Il percorso di acquisizione e i trasporti pesate sono ora task distinti dalle funzioni accessorie. La calibrazione è versionata e protetta da CRC. Consultare [la guida 2.1](reliability-2.1.md) per code, stabilità dopo pause, RTC, ordine sensori e completamento della pesata.

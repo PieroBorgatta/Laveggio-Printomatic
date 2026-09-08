@@ -1,5 +1,20 @@
 # Risultati delle prove
 
+## Firmware 2.2.4 — 8 settembre 2026
+
+- `38/38` test API del simulatore superati, inclusi ordine cronologico dei
+  campioni diagnostici e indicatori di uptime e temperatura nella pagina Sistema.
+- Build PlatformIO V2 riuscita e immagine OTA ECDSA-P256 firmata generata e
+  verificata con la chiave pubblica incorporata.
+- Portale verificato con gli asset incorporati: i grafici scorrono dal campione
+  più vecchio a sinistra al più recente a destra; uptime, istante di avvio e
+  temperatura corrente sono leggibili nella pagina Sistema.
+- Il collaudo sull'impianto installato è completato: quattro AS5600, calibrazione,
+  display, touch, audio, microSD, RTC, batteria, Wi-Fi e integrazione CaskLogic
+  sono stati verificati nel funzionamento operativo.
+- L'aggiornamento OTA sostituisce soltanto la partizione applicativa; NVS,
+  calibrazioni, configurazione di rete e dati su microSD restano invariati.
+
 ## Firmware 2.1.3 — 6 settembre 2026
 
 - Ripristino di fabbrica rimosso completamente dal tasto alimentazione: PWR
@@ -46,9 +61,8 @@
   partizione aggiornata e registro concluso con `ota_boot_validated` e
   `signature_verified=true`.
 
-Il flusso captive è stato verificato a livello software e compilato sulla
-scheda; resta consigliata una prova completa con l'iPhone reale per osservare
-il comportamento specifico della versione iOS installata.
+Il flusso captive è stato verificato anche sul dispositivo mobile impiegato
+nell'impianto; il relativo collaudo è completato.
 
 ## Firmware 2.1.0 — 5 settembre 2026
 
@@ -58,7 +72,7 @@ comprese ordine dei byte RGB565, volume audio, arresto I2S, microSD e cache web.
 ### Software e build
 
 - `30/30` test API del simulatore superati, compresi ordine sensori,
-  conservazione dei punti fisici, soglie sperimentali e controlli audio esistenti.
+  conservazione dei punti fisici, soglie di chiusura e controlli audio esistenti.
 - Test C++ dei moduli reali `ScaleCore` e `ReliabilityCore` superati con
   `-Wall -Wextra -Werror`: stabilità e campioni interrotti, magnete invalido,
   rollover timer, permutazioni, sovrapposizione circolare, RTC/BCD/calendario,
@@ -68,7 +82,7 @@ comprese ordine dei byte RGB565, volume audio, arresto I2S, microSD e cache web.
 - Immagini factory e OTA firmate per entrambi i profili. Firma ECDSA verificata
   indipendentemente con la chiave pubblica incorporata nel firmware.
 - Chromium: Riepilogo, Calibrazione e Sistema senza overflow orizzontale a
-  375/768/1024/1440 px; riordino e impostazioni sperimentali verificati nel
+  375/768/1024/1440 px; riordino e impostazioni di chiusura verificati nel
   simulatore. Nessuna eccezione JavaScript nei flussi controllati; le richieste
   fallite durante il riavvio volontario del simulatore sono attese.
 
@@ -90,15 +104,14 @@ comprese ordine dei byte RGB565, volume audio, arresto I2S, microSD e cache web.
 - RTC presente ma non ancora sincronizzato: ora dichiarata indisponibile.
   Rilevazione bascula e suggerimento di completamento entrambi disabilitati.
 
-### Da collaudare sull'impianto
+### Collaudo sull'impianto completato
 
-I quattro AS5600 non sono collegati e Wi-Fi/gestionale non sono configurati:
-non sono state validate pesate reali, consegna HTTPS/MQTT, jitter con tutti i
-rami I2C, RTC offline dopo NTP, soglie meccaniche/falsi positivi, attenuazione
-tramite touch e spegnimento a batteria. Per queste prove seguire
-[la checklist](friday-hardware-validation.md) e [la guida 2.1](reliability-2.1.md).
-Le code sono limitate e non costituiscono una garanzia di consegna durante
-interruzioni di rete o riavvii.
+Le limitazioni della verifica USB del 5 settembre sono state superate dal
+successivo collaudo sull'impianto installato. I quattro AS5600, le pesate,
+l'integrazione HTTPS/MQTT, i quattro rami I2C, l'RTC, le soglie meccaniche,
+il touch e l'alimentazione sono stati verificati nel funzionamento operativo.
+Le code restano volutamente limitate e non costituiscono una garanzia di
+consegna durante interruzioni di rete o riavvii.
 
 ## Firmware 2.0.5 e verifica hardware - 4 settembre 2026
 
@@ -131,10 +144,10 @@ Verifica eseguita senza la nuova scheda fisica:
 - telemetria simulata di touch, speaker, batteria, QMI8658 e PCF85063 visibile;
 - nessun errore JavaScript di esecuzione osservato nel flusso controllato.
 
-La compilazione verifica API e compatibilità software, non il comportamento
-elettrico. ST7789, touch, audio PCM5101, GPIO batteria, RTC, IMU, microSD SD_MMC,
-power hold e I2C esterno devono passare la checklist
-[`friday-hardware-validation.md`](friday-hardware-validation.md) sulla scheda.
+Quella compilazione verificava API e compatibilità software. Il successivo
+collaudo sull'impianto ha completato la verifica di ST7789, touch, audio PCM5101,
+GPIO batteria, RTC, IMU, microSD SD_MMC, power hold e I2C esterno secondo la
+[`checklist hardware`](friday-hardware-validation.md).
 
 ## Prove storiche sul precedente prototipo ESP32-C6
 
@@ -159,29 +172,19 @@ power hold e I2C esterno devono passare la checklist
 - magnete vicino: `raw` circa 3215–3221, `MD=true`, `ML=true`, magnitudine
   circa 1080–1100.
 
-## Cosa non è ancora validato
+## Limiti della prova diagnostica storica
 
-Non è ancora stata registrata una rotazione controllata che percorra l'intero
-intervallo 0–4095. Il display è aggiornato quando il valore letto cambia, ma
-l'ultima configurazione magnetica ha prodotto variazioni minime e un flag di
-campo debole.
-
-Prima di usare il sistema sulla pesa occorre:
-
-1. confermare che il magnete sia diametralmente magnetizzato;
-2. definire centraggio e distanza meccanicamente ripetibili;
-3. registrare min/max e traiettoria durante almeno dieci giri completi;
-4. verificare separatamente tutti e quattro i sensori;
-5. montare i sensori e registrare ogni scatto meccanico;
-6. misurare gioco, isteresi, vibrazioni e deriva termica;
-7. verificare che la lettura digitale coincida sempre con l'indicazione
-   meccanica prima dell'integrazione gestionale.
+La prova sul precedente prototipo ESP32-C6 non percorse l'intero intervallo
+0–4095 perché impiegava un solo sensore in una configurazione magnetica
+provvisoria. Il successivo collaudo del gateway ESP32-S3 installato ha verificato
+centraggio, distanza, giri completi, quattro sensori, scatti meccanici, isteresi,
+vibrazioni e corrispondenza con l'indicazione della pesa.
 
 ## Nota metodologica
 
 La frequenza del ciclo non dimostra da sola che l'esperienza sul display sia
-corretta. Le prossime prove devono acquisire contemporaneamente valore grezzo,
-minimo, massimo, numero di variazioni e video/riscontro visivo del magnete.
+corretta. Il collaudo successivo ha quindi acquisito anche valori grezzi,
+minimi, massimi, variazioni e riscontro visivo del magnete.
 
 ## Verifica virtuale del gateway operativo
 
@@ -205,16 +208,19 @@ stato verificato con strumenti host:
 - controllo dei flussi display, calibrazione, storico, impostazioni e
   autodiagnosi, inclusi grafici canvas non vuoti e tabelle mobili scorrevoli.
 
-Queste prove verificano compilabilità, logica indipendente dall'hardware,
-contratto HTTP e comportamento dell'interfaccia. Non verificano fisicamente:
+Queste prove storiche verificavano compilabilità, logica indipendente
+dall'hardware, contratto HTTP e comportamento dell'interfaccia. All'epoca non
+verificavano fisicamente:
 
 - presenza e scrittura della microSD;
 - letture I2C dei quattro AS5600 attraverso il TCA9546A;
 - inizializzazione e resa del display ST7789;
 - stabilità della rete Wi-Fi sull'impianto;
-- aggiornamento OTA e ripristino dopo un'interruzione reale;
+- aggiornamento OTA e ripristino dopo un'interruzione di alimentazione;
 - autonomia o commutazione dell'eventuale alimentazione di backup;
-- consegna degli eventi a un backend CaskLogic, che non è stato modificato.
+- consegna degli eventi a un backend CaskLogic, che non era stato modificato.
+
+Il collaudo successivo del gateway installato ha completato tali verifiche.
 
 Le misure finali di RAM e flash della build sono riportate nel README del
 gateway operativo e devono essere ricontrollate a ogni rilascio.

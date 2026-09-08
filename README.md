@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.1.3" src="https://img.shields.io/badge/firmware-2.1.3-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.2.4" src="https://img.shields.io/badge/firmware-2.2.4-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 35 su 35" src="https://img.shields.io/badge/test-35%2F35_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 38 su 38" src="https://img.shields.io/badge/test-38%2F38_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 ## 🧭 Panoramica
 
 CaskLogic PesaLink legge le quattro manopole meccaniche della pesa Laveggio
-Printomatic attraverso sensori magnetici AS5600, ricostruisce il peso stabile e conserva lo storico su
+Printomatic attraverso sensori magnetici AS5600, ricostruisce il peso e conserva lo storico su
 microSD. La Waveshare ESP32-S3-Touch-LCD-2.8 espone un display capacitivo
 240×320 e un portale web CaskLogic per
 calibrazione, diagnostica, manutenzione e integrazione con il gestionale.
@@ -50,11 +50,17 @@ documentazione hardware.
 > fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
-> La versione 2.1.3 separa acquisizione e invio prioritario dalle funzioni accessorie,
-> completa l'RTC offline e introduce ordine sensori e rilevazione sperimentale
-> della chiusura. Stabilizza inoltre il provisioning Wi-Fi da smartphone e aggiunge
-> lo spegnimento automatico del display. La funzione bascula parte disattivata e richiede prove sul
-> montaggio reale. Esiti e limiti del collaudo sono in [test-results](docs/test-results.md).
+> La versione 2.2.4 mantiene acquisizione e invio prioritario separati dalle
+> funzioni accessorie, include il collaudo completo della bascula e ordina i
+> grafici cronologicamente. Uptime e temperatura correnti sono visibili nella
+> pagina Sistema. La rilevazione della chiusura resta configurabile e parte
+> disattivata, ma è stata collaudata sul montaggio installato.
+
+## Novità 2.2.4
+
+- Grafici diagnostici ordinati dal campione più vecchio a sinistra al più recente a destra.
+- Uptime, istante di avvio e temperatura chip correnti evidenziati nella pagina Sistema.
+- Interfaccia e documentazione allineate al collaudo completato dell'impianto.
 
 ## Novità 2.1.3
 
@@ -76,7 +82,7 @@ documentazione hardware.
 - RTC UTC per riavvii senza rete, dopo la prima sincronizzazione; origine dell'ora esplicita.
 - Stati distinti: lettura stabile, salvataggio SD, ricezione HTTPS e pubblicazione MQTT.
 - Ordine dei sensori configurabile, controlli di rumore e sovrapposizione, calibrazione NVS con revisione e CRC.
-- Rilevazione **sperimentale** di colpo/quiete per la chiusura della bascula: soglie, tempi e modalità di sola osservazione.
+- Rilevazione collaudata di colpo/quiete per la chiusura della bascula: soglie, tempi e modalità di sola osservazione.
 - Luminosità, attenuazione, avvisi batteria e gestione del tasto di alimentazione.
 
 [Guida completa, impostazioni e procedura di prova](docs/reliability-2.1.md).
@@ -103,7 +109,7 @@ non trasforma la microSD in un NAS.
 | Pagina | Cosa permette di fare |
 | --- | --- |
 | **Riepilogo** | Leggere peso, stabilità, sensori, Wi-Fi, microSD, alimentazione e batteria. Display e conferma sonora hanno interruttori indipendenti e persistenti; il volume 0–100% vale sia per la conferma sia per `Prova bip`. |
-| **Calibrazione** | Associare a ciascuna manopola le dieci posizioni `0–9`, salvare il valore magnetico reale e regolare moltiplicatore, tolleranza e isteresi senza ricompilare il firmware. |
+| **Calibrazione** | Associare a ciascuna manopola le dieci posizioni `0–9`, salvare il valore magnetico e regolare moltiplicatore, tolleranza e isteresi senza ricompilare il firmware. |
 | **Storico** | Consultare soltanto le 20 pesate più recenti al primo accesso, filtrare e ordinare ogni colonna ed esportare esattamente il risultato dei filtri attivi. |
 | **Rete e gestionale** | Cercare reti Wi-Fi, scegliere DHCP o IP statico, configurare HTTPS/mTLS, HMAC, heartbeat, MQTT TLS e sincronizzazione controllata dal gestionale. |
 | **Sistema** | Gestire display, speaker, NTP/RTC, credenziali, retention, batteria, log, riavvio e OTA firmato. Swipe e barra touch cambiano pagina; BOOT breve resta disponibile e la pressione continua mostra il ripristino da 10 secondi. |
@@ -114,9 +120,8 @@ non trasforma la microSD in un NAS.
 
 ![Calibrazione dei quattro sensori](docs/assets/laveggio-calibrazione.png)
 
-Ogni sensore rappresenta una cifra della pesa. I valori predefiniti dei quattro
-moltiplicatori sono `10.000`, `1.000`, `100` e `10 kg`; devono essere confermati
-durante il collaudo meccanico reale.
+Ogni sensore rappresenta una cifra della pesa. I quattro moltiplicatori
+collaudati sono `10.000`, `1.000`, `100` e `10 kg`.
 
 ### Procedura
 
@@ -156,7 +161,7 @@ rimane non valida e non viene registrata come nuova pesata.
 4. Le quattro cifre vengono moltiplicate e sommate per ottenere i chilogrammi.
 5. La combinazione deve restare invariata per la finestra di stabilità.
 6. Una combinazione valida, stabile e diversa dalla precedente genera una
-   nuova riga nello storico e un evento firmato verso il gestionale. Una chiusura sperimentale può aggiungere un evento di completamento.
+   nuova riga nello storico e un evento firmato verso il gestionale. Una chiusura rilevata può aggiungere un evento di completamento.
 
 La microSD conserva lo storico indipendentemente dalla connessione di rete, ma
 non viene usata come coda automatica di reinvio.
@@ -200,12 +205,14 @@ flowchart LR
 | Cavo dati Lapp LiYY 4 × 0,14 mm², nero | 1 spezzone da 10 m | [Amazon.it · B0C69CJYZT](https://www.amazon.it/dp/B0C69CJYZT) |
 | Kit viti a macchina svasate nere M2 / M2,5 / M3, acciaio al carbonio | 1 kit da 500 | [Amazon.it · B0D1N4D5ZR](https://www.amazon.it/dp/B0D1N4D5ZR) |
 | Kit da 360 inserti filettati a caldo in ottone M2 / M2,5 / M3 / M4 / M5 / M6 | 1 kit | [Amazon.it · B0G1H5QBSF](https://www.amazon.it/dp/B0G1H5QBSF); utilizzati 8 inserti M5 × 6 mm |
+| Grani con punta M5 × 12 mm, acciaio inox A2, esagono incassato, DIN 914 / ISO 4027 | 8 (2 per supporto) | [Amazon.it · B0BZD8WXDQ](https://www.amazon.it/dp/B0BZD8WXDQ); confezione da 20 |
 | Speaker 8 Ω 2 W 2030 | 2 | Inclusi con la scheda Waveshare |
 | Batteria LiPo 803040, 3,7 V, 1000 mAh, protetta | 1 | [Amazon.it · B0G5NM9YJ4](https://www.amazon.it/dp/B0G5NM9YJ4); connettore JST 1,25 mm, polarità da verificare |
 | SanDisk Extreme microSDXC 128 GB, A2 / U3 / V30 | 1 | [Amazon.it · B07FCMKK5X](https://www.amazon.it/dp/B07FCMKK5X); montata e verificata in lettura/scrittura |
 
 Ciascuno dei quattro supporti dei sensori AS5600 utilizza due inserti
-filettati a caldo M5 × 6 mm, per un totale di otto inserti.
+filettati a caldo M5 × 6 mm e due grani con punta M5 × 12 mm. Il montaggio
+completo impiega otto inserti e otto grani.
 
 ### Foto del prototipo
 
@@ -308,7 +315,7 @@ Artefatti principali:
 
 Il portale locale usa HTTP e deve restare su una VLAN tecnica, senza port
 forwarding verso Internet. Secure Boot e Flash Encryption tramite eFuse
-richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
+richiedono provisioning fisico irreversibile su ciascuna scheda. Dettagli in
 [`docs/security.md`](docs/security.md) e
 [`docs/firmware-signing.md`](docs/firmware-signing.md).
 
@@ -340,12 +347,12 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
-- [x] Test host `35/35`, browser mobile WebKit e build ESP32-S3 V2/V1 completati
+- [x] Test host `38/38`, verifica browser e build ESP32-S3 V2/V1 completati
 - [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
 - [x] Collaudo completo del display, touch, due speaker, RTC in blackout, IMU sulla bascula e batteria
 - [x] Calibrazione meccanica completa delle quattro manopole
 - [x] MicroSD SanDisk Extreme 128 GB montata e verificata in lettura/scrittura
-- [x] Collaudo reale di batteria, commutazione e rollback forzato
+- [x] Collaudo di batteria, commutazione e rollback forzato
 - [x] Contratto implementato e integrato nel gestionale CaskLogic
 
 ## Licenza e attribuzioni

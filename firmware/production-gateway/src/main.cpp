@@ -46,7 +46,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.2.3";
+constexpr char kFirmwareVersion[] = "2.2.4";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -1879,6 +1879,9 @@ String buildDailyDiagnosticsJson() {
     }
     file.close();
   }
+  std::stable_sort(points.begin(), points.end(), [](const DiagnosticChartPoint &left, const DiagnosticChartPoint &right) {
+    return left.capturedAt < right.capturedAt;
+  });
   String json = "{\"current_available\":false,\"points\":[";
   for (size_t index = 0; index < points.size(); ++index) {
     if (index) json += ',';
