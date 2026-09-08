@@ -46,7 +46,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.2.2";
+constexpr char kFirmwareVersion[] = "2.2.3";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -2506,18 +2506,29 @@ void registerWebRoutes() {
   webServer.on("/api/calibration/settings", HTTP_POST, [] {
     if (!authorized()) return;
     const int channel = webServer.arg("channel").toInt();
+    const int multiplierSlot = webServer.arg("multiplier_slot").toInt();
     if (channel < 0 || channel >= laveggio::kChannelCount) {
       sendError(400, "Canale non valido");
       return;
     }
-    const auto previous = configStore.get().calibrations[channel];
-    auto calibration = previous;
-    calibration.multiplierKg = constrain(webServer.arg("multiplier").toInt(), 1, 100000);
+    if (multiplierSlot < 0 || multiplierSlot >= laveggio::kChannelCount ||
+        configStore.get().sensorOrder[multiplierSlot] != channel) {
+      sendError(409, "Ordine sensori cambiato: ricaricare la calibrazione");
+      return;
+    }
+    const auto previousChannel = configStore.get().calibrations[channel];
+    const uint32_t previousMultiplier = configStore.get().calibrations[multiplierSlot].multiplierKg;
+    auto calibration = previousChannel;
     calibration.tolerance = constrain(webServer.arg("tolerance").toInt(), 10, 1024);
     calibration.hysteresis = constrain(webServer.arg("hysteresis").toInt(), 0, 512);
     if(!laveggio::calibrationSeparated(calibration)) { sendError(409,"Tolleranza e isteresi sovrappongono le posizioni calibrate"); return; }
     configStore.mutableConfig().calibrations[channel]=calibration;
-    if(!configStore.saveCalibration(channel)) { configStore.mutableConfig().calibrations[channel]=previous; sendError(500,"Salvataggio calibrazione non riuscito"); return; }
+    configStore.mutableConfig().calibrations[multiplierSlot].multiplierKg = constrain(webServer.arg("multiplier").toInt(), 1, 100000);
+    if(!configStore.saveCalibration(channel)) {
+      configStore.mutableConfig().calibrations[channel]=previousChannel;
+      configStore.mutableConfig().calibrations[multiplierSlot].multiplierKg=previousMultiplier;
+      sendError(500,"Salvataggio calibrazione non riuscito"); return;
+    }
     refreshRuntimeConfiguration();
     sendJson("{\"ok\":true}");
   });

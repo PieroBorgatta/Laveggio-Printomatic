@@ -88,3 +88,14 @@ test('sensor order rejects duplicates and preserves physical calibration points'
  response=await post(`${base}/api/calibration/order`,new URLSearchParams({slot_0:'3',slot_1:'2',slot_2:'1',slot_3:'0'}));assert.equal(response.status,200);
  const after=await(await fetch(`${base}/api/calibration`)).json();assert.deepEqual(after.sensor_order,[3,2,1,0]);assert.deepEqual(after.channels,before.channels);assert.equal(after.revision,before.revision+1);
 }));
+test('calibration settings update the multiplier of the mapped logical position',()=>withServer(async base=>{
+ await post(`${base}/api/calibration/order`,new URLSearchParams({slot_0:'3',slot_1:'2',slot_2:'1',slot_3:'0'}));
+ const before=await(await fetch(`${base}/api/calibration`)).json();
+ const response=await post(`${base}/api/calibration/settings`,new URLSearchParams({channel:'0',multiplier_slot:'3',multiplier:'25',tolerance:'91',hysteresis:'29'}));
+ assert.equal(response.status,200);
+ const after=await(await fetch(`${base}/api/calibration`)).json();
+ assert.equal(after.channels[3].multiplier_kg,25);
+ assert.equal(after.channels[0].multiplier_kg,before.channels[0].multiplier_kg);
+ assert.equal(after.channels[0].tolerance,91);
+ assert.equal(after.channels[0].hysteresis,29);
+}));
