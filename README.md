@@ -222,6 +222,16 @@ filettati a caldo M5 × 6 mm, per un totale di otto inserti.
   <img src="docs/assets/photos/pesalink-boccole-calamita.png" width="48%" alt="Boccole stampate per le calamite">
 </p>
 
+### Foto dell'installazione completata
+
+<p align="center">
+  <img src="docs/assets/photos/pesalink-installazione-completa.png" width="96%" alt="Installazione completa dei quattro sensori PesaLink e del gateway sulla bascula">
+</p>
+<p align="center">
+  <img src="docs/assets/photos/pesalink-installazione-sensori.jpg" width="48%" alt="Dettaglio dei supporti e dei sensori PesaLink installati sulla bascula">
+  <img src="docs/assets/photos/pesalink-installazione-prospettiva.jpg" width="48%" alt="Installazione PesaLink vista in prospettiva con quattro sensori e display">
+</p>
+
 I file pronti per la stampa, compreso il progetto Bambu Studio, sono raccolti
 in [`stl/original-designs`](stl/original-designs/). Il progetto completo è
 disponibile anche su [MakerWorld](https://makerworld.com/it/models/3269009-pesalink#profileId-3706531).
@@ -326,15 +336,17 @@ richiedono provisioning fisico irreversibile sulla scheda reale. Dettagli in
 
 ## Stato del progetto
 
+**Progetto completato:** installazione, calibrazione, collaudo hardware e integrazione con CaskLogic conclusi.
+
 - [x] Lettura AS5600 e multiplexer verificata sul prototipo
 - [x] Gateway, portale web e simulatore implementati
 - [x] Test host `35/35`, browser mobile WebKit e build ESP32-S3 V2/V1 completati
 - [x] Doppia partizione OTA da 6 MiB e firma ECDSA generate per entrambi i profili
-- [ ] Collaudo completo del display, touch, due speaker, RTC in blackout, IMU sulla bascula e batteria
-- [ ] Calibrazione meccanica completa delle quattro manopole
+- [x] Collaudo completo del display, touch, due speaker, RTC in blackout, IMU sulla bascula e batteria
+- [x] Calibrazione meccanica completa delle quattro manopole
 - [x] MicroSD SanDisk Extreme 128 GB montata e verificata in lettura/scrittura
-- [ ] Collaudo reale di batteria, commutazione e rollback forzato
-- [ ] Implementazione del contratto nel gestionale CaskLogic
+- [x] Collaudo reale di batteria, commutazione e rollback forzato
+- [x] Contratto implementato e integrato nel gestionale CaskLogic
 
 ## Licenza e attribuzioni
 
