@@ -47,7 +47,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.2.6";
+constexpr char kFirmwareVersion[] = "2.2.7";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -191,6 +191,9 @@ uint32_t lastConfigSyncMs = 0;
 uint32_t lastRetentionMs = 0;
 uint32_t stationConnectedSinceMs = 0;
 uint32_t scheduledRestartMs = 0;
+uint32_t lastRestartScheduleCheckMs = 0;
+uint32_t lastScheduledRestartDate = 0;
+volatile bool logExportActive = false;
 uint32_t scheduledNetworkApplyMs = 0;
 uint32_t factoryResetPressedSinceMs = 0;
 bool factoryResetTriggered = false;
@@ -207,20 +210,9 @@ size_t otaExpectedBytes = 0;
 size_t otaReceivedBytes = 0;
 UpdaterECDSAVerifier otaVerifier(PUBLIC_KEY, PUBLIC_KEY_LEN, HASH_SHA256);
 bool configSyncAttemptedThisBoot = false;
-bool cpuFrequencyApplied = true;
 
 void logSystem(const String &level, const String &event, const String &detail);
 bool syncRemoteConfiguration();
-
-bool supportedCpuFrequency(uint16_t frequencyMhz) {
-  return frequencyMhz == 80 || frequencyMhz == 160 || frequencyMhz == 240;
-}
-
-const char *cpuProfileLabel(uint16_t frequencyMhz) {
-  if (frequencyMhz == 80) return "bassa_temperatura";
-  if (frequencyMhz == 160) return "bilanciato";
-  return "prestazioni";
-}
 
 String jsonEscape(const String &value) {
   String escaped;
@@ -754,6 +746,25 @@ bool queueOutbound(const String &url, const String &token, const String &body, b
   const bool queued = xQueueSend(outboundQueue, message, 0) == pdTRUE;
   free(message);
   return queued;
+}
+
+void checkProgrammedRestart(uint32_t now) {
+  if (now - lastRestartScheduleCheckMs < 10000 || scheduledRestartMs != 0 ||
+      !timeSynchronized || now < 120000) return;
+  lastRestartScheduleCheckMs = now;
+  const DeviceConfig &config = configStore.get();
+  if (config.restartSchedule == "off") return;
+  tm timeInfo{};
+  if (!getLocalTime(&timeInfo, 10)) return;
+  if (timeInfo.tm_hour != config.restartHour || timeInfo.tm_min != config.restartMinute) return;
+  const uint8_t isoWeekday = timeInfo.tm_wday == 0 ? 7 : timeInfo.tm_wday;
+  if (config.restartSchedule == "weekly" && isoWeekday != config.restartWeekday) return;
+  const uint32_t dateKey = static_cast<uint32_t>(timeInfo.tm_year + 1900) * 10000UL +
+    static_cast<uint32_t>(timeInfo.tm_mon + 1) * 100UL + timeInfo.tm_mday;
+  if (dateKey == lastScheduledRestartDate) return;
+  lastScheduledRestartDate = dateKey;
+  logSystem("warning", "programmed_restart", "schedule=" + config.restartSchedule);
+  scheduledRestartMs = now + 1200;
 }
 
 void integrationTask(void *) {
@@ -1501,10 +1512,7 @@ String buildStatusJson() {
   json += ",\"speaker_ready\":" + boolJson(speaker.ready());
   json += ",\"speaker_volume_percent\":" + String(config.speakerVolumePercent);
   json += ",\"scan_rate_hz\":" + String(scansPerSecond);
-  json += ",\"performance\":{\"configured_cpu_mhz\":" + String(config.cpuFrequencyMhz);
-  json += ",\"actual_cpu_mhz\":" + String(getCpuFrequencyMhz());
-  json += ",\"profile\":" + quoted(cpuProfileLabel(config.cpuFrequencyMhz));
-  json += ",\"applied\":" + boolJson(cpuFrequencyApplied) + "}";
+  json += ",\"cpu_frequency_mhz\":" + String(getCpuFrequencyMhz());
   json += ",\"network\":{\"connected\":" + boolJson(WiFi.status() == WL_CONNECTED);
   json += ",\"ssid\":" + quoted(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "");
   json += ",\"ip\":" + quoted(WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "");
@@ -1667,7 +1675,10 @@ String buildSettingsJson() {
   json += ",\"battery_min_mv\":" + String(config.batteryMinMv);
   json += ",\"battery_max_mv\":" + String(config.batteryMaxMv);
   json += ",\"battery_capacity_mah\":" + String(config.batteryCapacityMah);
-  json += ",\"cpu_frequency_mhz\":" + String(config.cpuFrequencyMhz);
+  json += ",\"restart_schedule\":" + quoted(config.restartSchedule);
+  json += ",\"restart_hour\":" + String(config.restartHour);
+  json += ",\"restart_minute\":" + String(config.restartMinute);
+  json += ",\"restart_weekday\":" + String(config.restartWeekday);
   json += ",\"csrf_token\":" + quoted(csrfToken) + "}";
   return json;
 }
@@ -1700,7 +1711,7 @@ String buildCalibrationJson() {
 }
 
 struct HistoryQuery {
-  size_t limit = 20;
+  size_t limit = 5;
   String from;
   String to;
   String digits;
@@ -2072,7 +2083,7 @@ HistoryQuery historyQueryFromRequest(bool includeLimit = true) {
   HistoryQuery query;
   if (includeLimit) {
     const int requestedLimit = webServer.arg("limit").toInt();
-    query.limit = constrain(requestedLimit > 0 ? requestedLimit : 20, 1, 100);
+    query.limit = constrain(requestedLimit > 0 ? requestedLimit : 5, 1, 100);
   }
   query.from = webServer.arg("from");
   query.to = webServer.arg("to");
@@ -2139,7 +2150,7 @@ bool isDefaultRecentHistoryQuery(const HistoryQuery &query) {
 String buildHistoryJson(const HistoryQuery &query) {
   const std::vector<String> paths = listNdjsonFiles("/weights", "history");
   if (paths.empty()) return "{\"items\":[]}";
-  const size_t tailBytes = 128UL * 1024UL;
+  const size_t tailBytes = 32UL * 1024UL;
   std::vector<String> lines;
   lines.reserve(query.limit + 1);
   if (!isDefaultRecentHistoryQuery(query)) {
@@ -2214,35 +2225,88 @@ void streamFilteredHistoryExport(const HistoryQuery &query) {
   webServer.sendContent("");
 }
 
-void streamNdjsonExport(
+struct LogExportJob {
+  NetworkClient client;
+  std::vector<String> paths;
+  std::vector<size_t> sizes;
+};
+
+void logExportTask(void *context) {
+  LogExportJob *job = static_cast<LogExportJob *>(context);
+  uint8_t buffer[2048];
+  for (size_t index = 0; index < job->paths.size() && job->client.connected(); ++index) {
+    File file = SD.open(job->paths[index], FILE_READ);
+    if (!file) continue;
+    size_t remaining = job->sizes[index];
+    while (remaining > 0 && file.available() && job->client.connected()) {
+      const size_t count = file.read(buffer, min(sizeof(buffer), remaining));
+      if (count == 0) break;
+      size_t sent = 0;
+      while (sent < count && job->client.connected()) {
+        const size_t written = job->client.write(buffer + sent, count - sent);
+        if (written == 0) {
+          vTaskDelay(pdMS_TO_TICKS(10));
+          continue;
+        }
+        sent += written;
+      }
+      remaining -= count;
+      vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    file.close();
+  }
+  job->client.stop();
+  delete job;
+  logExportActive = false;
+  vTaskDelete(nullptr);
+}
+
+void startNdjsonExport(
   const char *directory,
   const char *prefix,
   const char *downloadName,
   const char *emptyMessage
 ) {
+  if (logExportActive) {
+    sendError(429, "Un'esportazione dei log e gia in corso");
+    return;
+  }
   const std::vector<String> paths = listNdjsonFiles(directory, prefix);
   if (paths.empty()) {
     sendError(404, emptyMessage);
     return;
   }
-  sendSecurityHeaders();
-  webServer.sendHeader("Cache-Control", "no-store");
-  webServer.sendHeader("Content-Disposition", "attachment; filename=" + String(downloadName));
-  webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
-  webServer.send(200, "application/x-ndjson", "");
-  char buffer[1025];
+  size_t totalBytes = 0;
+  auto *job = new LogExportJob();
+  if (!job) {
+    sendError(503, "Memoria insufficiente per avviare l'esportazione");
+    return;
+  }
+  job->paths = paths;
+  job->sizes.reserve(paths.size());
   for (const String &path : paths) {
     File file = SD.open(path, FILE_READ);
-    if (!file) continue;
-    while (file.available()) {
-      const size_t count = file.readBytes(buffer, sizeof(buffer) - 1);
-      if (count == 0) break;
-      buffer[count] = '\0';
-      webServer.sendContent(String(buffer));
+    size_t fileSize = 0;
+    if (file) {
+      fileSize = file.size();
+      totalBytes += fileSize;
+      file.close();
     }
-    file.close();
+    job->sizes.push_back(fileSize);
   }
-  webServer.sendContent("");
+  sendSecurityHeaders();
+  webServer.sendHeader("Cache-Control", "no-store");
+  webServer.sendHeader("X-PesaLink-Streaming", "background");
+  webServer.sendHeader("Content-Disposition", "attachment; filename=" + String(downloadName));
+  webServer.setContentLength(totalBytes);
+  webServer.send(200, "application/x-ndjson", "");
+  job->client = webServer.client();
+  logExportActive = true;
+  if (xTaskCreate(logExportTask, "log_export", 6144, job, 1, nullptr) != pdPASS) {
+    logExportActive = false;
+    job->client.stop();
+    delete job;
+  }
 }
 
 void registerWebRoutes() {
@@ -2370,7 +2434,7 @@ void registerWebRoutes() {
   });
   webServer.on("/api/logs/export", HTTP_GET, [] {
     if (!authorized()) return;
-    streamNdjsonExport(
+    startNdjsonExport(
       "/logs",
       "system",
       "pesalink-log-completo.ndjson",
@@ -2711,30 +2775,6 @@ void registerWebRoutes() {
     sendJson("{\"ok\":true}");
   });
 
-  webServer.on("/api/settings/cpu", HTTP_POST, [] {
-    if (!authorized()) return;
-    const String value = webServer.arg("cpu_frequency_mhz");
-    if (value != "80" && value != "160" && value != "240") {
-      sendError(400, "Frequenza CPU consentita: 80, 160 o 240 MHz");
-      return;
-    }
-    const uint16_t requested = static_cast<uint16_t>(value.toInt());
-    const uint16_t previous = configStore.get().cpuFrequencyMhz;
-    configStore.mutableConfig().cpuFrequencyMhz = requested;
-    if (!configStore.saveCpuFrequency()) {
-      configStore.mutableConfig().cpuFrequencyMhz = previous;
-      sendError(500, "Impossibile salvare il profilo CPU");
-      return;
-    }
-    const bool restartRequired = requested != getCpuFrequencyMhz();
-    logSystem("info", "cpu_frequency_saved", "mhz=" + String(requested));
-    sendJson(
-      "{\"ok\":true,\"cpu_frequency_mhz\":" + String(requested) +
-      ",\"restart_required\":" + boolJson(restartRequired) + "}"
-    );
-    if (restartRequired) scheduledRestartMs = millis() + 1800;
-  });
-
   webServer.on("/api/settings/system", HTTP_POST, [] {
     if (!authorized()) return;
     const String hostname = webServer.arg("hostname");
@@ -2742,6 +2782,10 @@ void registerWebRoutes() {
     const String timezone = webServer.arg("timezone");
     const String adminUser = webServer.arg("admin_user");
     const String adminPassword = webServer.arg("admin_password");
+    const String restartSchedule = webServer.arg("restart_schedule");
+    const int restartHour = webServer.arg("restart_hour").toInt();
+    const int restartMinute = webServer.arg("restart_minute").toInt();
+    const int restartWeekday = webServer.arg("restart_weekday").toInt();
     const uint16_t batteryMinMv = constrain(webServer.arg("battery_min_mv").toInt(), 2500, 4200);
     const uint16_t batteryMaxMv = constrain(webServer.arg("battery_max_mv").toInt(), 3500, 5000);
     if (hostname.isEmpty() || hostname.length() > 63 || ntpServer.isEmpty() ||
@@ -2756,6 +2800,15 @@ void registerWebRoutes() {
     }
     if (batteryMaxMv <= batteryMinMv) {
       sendError(400, "La tensione massima batteria deve superare la minima");
+      return;
+    }
+    if (restartSchedule != "off" && restartSchedule != "daily" && restartSchedule != "weekly") {
+      sendError(400, "Programmazione riavvio non valida");
+      return;
+    }
+    if (restartHour < 0 || restartHour > 23 || restartMinute < 0 || restartMinute > 59 ||
+        restartWeekday < 1 || restartWeekday > 7) {
+      sendError(400, "Ora o giorno del riavvio non validi");
       return;
     }
     DeviceConfig &config = configStore.mutableConfig();
@@ -2779,6 +2832,10 @@ void registerWebRoutes() {
     config.batteryMinMv = batteryMinMv;
     config.batteryMaxMv = batteryMaxMv;
     config.batteryCapacityMah = constrain(webServer.arg("battery_capacity_mah").toInt(), 100, 20000);
+    config.restartSchedule = restartSchedule;
+    config.restartHour = static_cast<uint8_t>(restartHour);
+    config.restartMinute = static_cast<uint8_t>(restartMinute);
+    config.restartWeekday = static_cast<uint8_t>(restartWeekday);
     configStore.saveSettings();
     refreshRuntimeConfiguration();
     displayOn = config.displayDefaultOn;
@@ -3086,20 +3143,8 @@ void setup() {
   );
   csrfToken = csrf;
   configStore.begin(deviceSuffix);
-  const uint16_t configuredCpuFrequency = configStore.get().cpuFrequencyMhz;
-  cpuFrequencyApplied = supportedCpuFrequency(configuredCpuFrequency) &&
-    setCpuFrequencyMhz(configuredCpuFrequency) &&
-    getCpuFrequencyMhz() == configuredCpuFrequency;
-  if (!cpuFrequencyApplied) {
-    setCpuFrequencyMhz(240);
-  }
-  Serial.printf(
-    "CPU profile: %s, configured=%u MHz, actual=%u MHz, applied=%s\n",
-    cpuProfileLabel(configuredCpuFrequency),
-    configuredCpuFrequency,
-    getCpuFrequencyMhz(),
-    cpuFrequencyApplied ? "true" : "false"
-  );
+  setCpuFrequencyMhz(240);
+  Serial.printf("CPU frequency fixed at %u MHz\n", getCpuFrequencyMhz());
 
   pinMode(kMuxReset, OUTPUT);
   digitalWrite(kMuxReset, HIGH);
@@ -3336,5 +3381,6 @@ void loop() {
     delay(50);
     ESP.restart();
   }
+  checkProgrammedRestart(now);
   delay(1);
 }

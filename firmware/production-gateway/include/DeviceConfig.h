@@ -59,7 +59,10 @@ struct DeviceConfig {
   uint16_t batteryMinMv = 3200;
   uint16_t batteryMaxMv = 4200;
   uint16_t batteryCapacityMah = 1000;
-  uint16_t cpuFrequencyMhz = 240;
+  String restartSchedule = "off";
+  uint8_t restartHour = 3;
+  uint8_t restartMinute = 0;
+  uint8_t restartWeekday = 1;
   uint8_t sensorOrder[4] = {0,1,2,3};
   uint32_t calibrationRevision = 0;
   bool calibrationChecksumValid = true;
@@ -83,7 +86,6 @@ class ConfigStore {
   bool saveDisplayDefaultOn();
   bool saveSpeakerDefaultOn();
   bool saveSpeakerVolume();
-  bool saveCpuFrequency();
   bool saveHeartbeatRestartSuppressed();
   bool saveRemoteConfigVersion();
   bool saveCalibration(uint8_t channel);

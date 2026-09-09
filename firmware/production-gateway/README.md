@@ -154,14 +154,21 @@ USB: un OTA della precedente ESP32-C6 non può trasformare o migrare l'hardware.
 Gli esiti e la sequenza eseguita sono in
 [`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).
 
-## Versione 2.2.6
+## Versione 2.2.7
 
 I grafici diagnostici sono ordinati cronologicamente. La pagina Sistema mostra
 uptime, istante di avvio, temperatura interna della CPU, temperatura del QMI8658
-e frequenza CPU corrente. Dal portale si può selezionare un profilo fisso a 240,
-160 o 80 MHz; la modifica è applicata con un riavvio, viene validata e usa 240 MHz
-come fallback. Il profilo è memorizzato separatamente dalle calibrazioni. La
-rilevazione della chiusura è documentata come collaudata e resta configurabile.
+e frequenza CPU corrente. La CPU resta fissa a 240 MHz: selettore e profili ridotti
+sono stati rimossi. I log completi vengono trasferiti da un task a bassa priorità
+in blocchi da 2 KB, mentre lo storico ordinario mostra cinque pesate. Il riavvio
+può essere disattivato oppure programmato ogni giorno o ogni settimana. Le nuove
+preferenze sono memorizzate separatamente dalle calibrazioni. La rilevazione della
+chiusura è documentata come collaudata e resta configurabile.
+
+SSH/SFTP non è incluso: l'esempio ESP32 disponibile implementa un ponte SSH verso
+UART, mentre l'accesso SFTP alla microSD richiede un secondo stack crittografico e
+un adattamento specifico del filesystem. Su questo dispositivo avrebbe un impatto
+non accettabile sulla priorità riservata ad acquisizione e invio.
 
 ## Versione 2.1.3
 

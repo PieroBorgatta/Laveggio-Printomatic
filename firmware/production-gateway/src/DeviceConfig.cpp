@@ -111,10 +111,14 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.batteryMinMv = preferences_.getUShort("bat_min_mv", 3200);
   config_.batteryMaxMv = preferences_.getUShort("bat_max_mv", 4200);
   config_.batteryCapacityMah = preferences_.getUShort("bat_cap_mah", 1000);
-  config_.cpuFrequencyMhz = preferences_.getUShort("cpu_mhz", 240);
-  if (config_.cpuFrequencyMhz != 80 && config_.cpuFrequencyMhz != 160 && config_.cpuFrequencyMhz != 240) {
-    config_.cpuFrequencyMhz = 240;
-  }
+  // La frequenza e nuovamente fissa a 240 MHz. Rimuovere l'eventuale profilo
+  // della 2.2.6 evita che un rollback riattivi per errore 80/160 MHz.
+  if (preferences_.isKey("cpu_mhz")) preferences_.remove("cpu_mhz");
+  config_.restartSchedule = preferences_.getString("rst_schedule", "off");
+  if (config_.restartSchedule != "daily" && config_.restartSchedule != "weekly") config_.restartSchedule = "off";
+  config_.restartHour = min<uint8_t>(preferences_.getUChar("rst_hour", 3), 23);
+  config_.restartMinute = min<uint8_t>(preferences_.getUChar("rst_minute", 0), 59);
+  config_.restartWeekday = constrain(preferences_.getUChar("rst_weekday", 1), 1, 7);
 
   // Aggiorna solo i vecchi valori automatici; le personalizzazioni dell'operatore restano intatte.
   if (config_.deviceId == legacyDeviceId) {
@@ -256,7 +260,10 @@ bool ConfigStore::saveSettings() {
   preferences_.putUShort("bat_min_mv", config_.batteryMinMv);
   preferences_.putUShort("bat_max_mv", config_.batteryMaxMv);
   preferences_.putUShort("bat_cap_mah", config_.batteryCapacityMah);
-  preferences_.putUShort("cpu_mhz", config_.cpuFrequencyMhz);
+  preferences_.putString("rst_schedule", config_.restartSchedule);
+  preferences_.putUChar("rst_hour", config_.restartHour);
+  preferences_.putUChar("rst_minute", config_.restartMinute);
+  preferences_.putUChar("rst_weekday", config_.restartWeekday);
   preferences_.putBytes("sensor_order",config_.sensorOrder,sizeof(config_.sensorOrder));
   preferences_.putUChar("brightness",config_.displayBrightness);
   preferences_.putUShort("dim_seconds",config_.displayDimSeconds);
@@ -299,13 +306,6 @@ bool ConfigStore::saveSpeakerDefaultOn() {
 bool ConfigStore::saveSpeakerVolume() {
   preferences_.putUChar("speaker_vol", config_.speakerVolumePercent);
   return true;
-}
-
-bool ConfigStore::saveCpuFrequency() {
-  if (config_.cpuFrequencyMhz != 80 && config_.cpuFrequencyMhz != 160 && config_.cpuFrequencyMhz != 240) {
-    return false;
-  }
-  return preferences_.putUShort("cpu_mhz", config_.cpuFrequencyMhz) == sizeof(uint16_t);
 }
 
 bool ConfigStore::saveHeartbeatRestartSuppressed() {
