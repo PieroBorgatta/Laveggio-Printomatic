@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="Firmware 2.2.5" src="https://img.shields.io/badge/firmware-2.2.5-17324d?style=for-the-badge&logo=espressif&logoColor=white">
+  <img alt="Firmware 2.2.6" src="https://img.shields.io/badge/firmware-2.2.6-17324d?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="ESP32-S3" src="https://img.shields.io/badge/ESP32--S3-Touch_LCD-e7352c?style=for-the-badge&logo=espressif&logoColor=white">
   <img alt="PlatformIO" src="https://img.shields.io/badge/PlatformIO-build_passed-f5822a?style=for-the-badge&logo=platformio&logoColor=white">
-  <img alt="Test 38 su 38" src="https://img.shields.io/badge/test-38%2F38_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
+  <img alt="Test 39 su 39" src="https://img.shields.io/badge/test-39%2F39_passed-16875b?style=for-the-badge&logo=checkmarx&logoColor=white">
 </p>
 
 <p align="center">
@@ -50,16 +50,18 @@ documentazione hardware.
 > fiscali o verifiche metrologiche legali.
 
 > [!IMPORTANT]
-> La versione 2.2.5 mantiene acquisizione e invio prioritario separati dalle
+> La versione 2.2.6 mantiene acquisizione e invio prioritario separati dalle
 > funzioni accessorie, include il collaudo completo della bascula e ordina i
-> grafici cronologicamente. Uptime e temperatura correnti sono visibili nella
-> pagina Sistema. La rilevazione della chiusura resta configurabile e parte
+> grafici cronologicamente. Uptime, temperature CPU e QMI8658 e frequenza CPU
+> sono visibili nella pagina Sistema. La rilevazione della chiusura resta configurabile e parte
 > disattivata, ma è stata collaudata sul montaggio installato.
 
-## Novità 2.2.5
+## Novità 2.2.6
 
 - Grafici diagnostici ordinati dal campione più vecchio a sinistra al più recente a destra.
-- Uptime, istante di avvio e temperatura chip correnti evidenziati nella pagina Sistema.
+- Uptime, istante di avvio, temperatura interna della CPU e temperatura del QMI8658 evidenziati nella pagina Sistema.
+- Frequenza CPU configurabile dal portale a 240, 160 oppure 80 MHz, applicata al riavvio con validazione e fallback sicuro a 240 MHz.
+- Profilo CPU salvato in una chiave NVS indipendente, senza riscrivere calibrazioni, rete, integrazione o storico microSD.
 - Interfaccia e documentazione allineate al collaudo completato dell'impianto.
 
 ## Novità 2.1.3

@@ -22,6 +22,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <esp_sntp.h>
+#include <esp32-hal-cpu.h>
 #include "Acquisition.h"
 #include "DeliveryPipeline.h"
 #include <algorithm>
@@ -46,7 +47,7 @@ extern "C" bool verifyRollbackLater() {
 
 namespace {
 
-constexpr char kFirmwareVersion[] = "2.2.5";
+constexpr char kFirmwareVersion[] = "2.2.6";
 constexpr uint8_t kAs5600Address = 0x36;
 constexpr uint8_t kSdClock = 14;
 constexpr uint8_t kSdCommand = 17;
@@ -206,9 +207,20 @@ size_t otaExpectedBytes = 0;
 size_t otaReceivedBytes = 0;
 UpdaterECDSAVerifier otaVerifier(PUBLIC_KEY, PUBLIC_KEY_LEN, HASH_SHA256);
 bool configSyncAttemptedThisBoot = false;
+bool cpuFrequencyApplied = true;
 
 void logSystem(const String &level, const String &event, const String &detail);
 bool syncRemoteConfiguration();
+
+bool supportedCpuFrequency(uint16_t frequencyMhz) {
+  return frequencyMhz == 80 || frequencyMhz == 160 || frequencyMhz == 240;
+}
+
+const char *cpuProfileLabel(uint16_t frequencyMhz) {
+  if (frequencyMhz == 80) return "bassa_temperatura";
+  if (frequencyMhz == 160) return "bilanciato";
+  return "prestazioni";
+}
 
 String jsonEscape(const String &value) {
   String escaped;
@@ -468,6 +480,8 @@ void recordSensorDiagnostics() {
   line += ",\"battery_voltage_mv\":" + String(batteryVoltageMv);
   line += ",\"current_ma\":null";
   line += ",\"chip_temperature_c\":" + String(temperatureRead(), 1);
+  line += ",\"board_temperature_c\":" + String(acquisitionState.board.boardTemperatureC, 1);
+  line += ",\"cpu_frequency_mhz\":" + String(getCpuFrequencyMhz());
   line += ",\"wifi_rssi\":" + String(WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0);
   line += ",\"free_heap\":" + String(ESP.getFreeHeap());
   line += ",\"weight_kg\":" + String(currentSnapshot.weightKg);
@@ -1393,6 +1407,8 @@ String buildPrometheusMetrics() {
   metrics += "# TYPE pesalink_sd_free_bytes gauge\npesalink_sd_free_bytes " + String(sdReady ? SD.totalBytes() - SD.usedBytes() : 0) + "\n";
   metrics += "# TYPE pesalink_battery_voltage_millivolts gauge\npesalink_battery_voltage_millivolts " + String(batteryVoltageMv) + "\n";
   metrics += "# TYPE pesalink_chip_temperature_celsius gauge\npesalink_chip_temperature_celsius " + String(temperatureRead(), 1) + "\n";
+  metrics += "# TYPE pesalink_board_temperature_celsius gauge\npesalink_board_temperature_celsius " + String(acquisitionState.board.boardTemperatureC, 1) + "\n";
+  metrics += "# TYPE pesalink_cpu_frequency_mhz gauge\npesalink_cpu_frequency_mhz " + String(getCpuFrequencyMhz()) + "\n";
   metrics += "# TYPE pesalink_integration_last_ok gauge\npesalink_integration_last_ok " + String(integrationLastOk ? 1 : 0) + "\n";
   metrics += "# TYPE pesalink_mqtt_connected gauge\npesalink_mqtt_connected " + String(mqttClient.connected() ? 1 : 0) + "\n";
   metrics += "# TYPE pesalink_weight_kg gauge\npesalink_weight_kg " + String(currentSnapshot.weightKg) + "\n";
@@ -1485,6 +1501,10 @@ String buildStatusJson() {
   json += ",\"speaker_ready\":" + boolJson(speaker.ready());
   json += ",\"speaker_volume_percent\":" + String(config.speakerVolumePercent);
   json += ",\"scan_rate_hz\":" + String(scansPerSecond);
+  json += ",\"performance\":{\"configured_cpu_mhz\":" + String(config.cpuFrequencyMhz);
+  json += ",\"actual_cpu_mhz\":" + String(getCpuFrequencyMhz());
+  json += ",\"profile\":" + quoted(cpuProfileLabel(config.cpuFrequencyMhz));
+  json += ",\"applied\":" + boolJson(cpuFrequencyApplied) + "}";
   json += ",\"network\":{\"connected\":" + boolJson(WiFi.status() == WL_CONNECTED);
   json += ",\"ssid\":" + quoted(WiFi.status() == WL_CONNECTED ? WiFi.SSID() : "");
   json += ",\"ip\":" + quoted(WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "");
@@ -1647,6 +1667,7 @@ String buildSettingsJson() {
   json += ",\"battery_min_mv\":" + String(config.batteryMinMv);
   json += ",\"battery_max_mv\":" + String(config.batteryMaxMv);
   json += ",\"battery_capacity_mah\":" + String(config.batteryCapacityMah);
+  json += ",\"cpu_frequency_mhz\":" + String(config.cpuFrequencyMhz);
   json += ",\"csrf_token\":" + quoted(csrfToken) + "}";
   return json;
 }
@@ -1848,7 +1869,8 @@ String buildDiagnosticsJson(bool active) {
 struct DiagnosticChartPoint {
   String capturedAt;
   long batteryMv;
-  float temperatureC;
+  float chipTemperatureC;
+  float boardTemperatureC;
   long rssi;
   long freeHeap;
 };
@@ -1873,6 +1895,7 @@ String buildDailyDiagnosticsJson() {
         capturedAt,
         jsonLongField(line, "battery_voltage_mv"),
         jsonFloatField(line, "chip_temperature_c"),
+        jsonFloatField(line, "board_temperature_c"),
         jsonLongField(line, "wifi_rssi"),
         jsonLongField(line, "free_heap")
       });
@@ -1889,7 +1912,8 @@ String buildDailyDiagnosticsJson() {
     json += "{\"captured_at\":" + quoted(point.capturedAt);
     json += ",\"battery_mv\":" + String(point.batteryMv);
     json += ",\"current_ma\":null";
-    json += ",\"temperature_c\":" + String(point.temperatureC, 1);
+    json += ",\"temperature_c\":" + String(point.chipTemperatureC, 1);
+    json += ",\"board_temperature_c\":" + String(point.boardTemperatureC, 1);
     json += ",\"rssi\":" + String(point.rssi);
     json += ",\"free_heap\":" + String(point.freeHeap) + "}";
   }
@@ -2687,6 +2711,30 @@ void registerWebRoutes() {
     sendJson("{\"ok\":true}");
   });
 
+  webServer.on("/api/settings/cpu", HTTP_POST, [] {
+    if (!authorized()) return;
+    const String value = webServer.arg("cpu_frequency_mhz");
+    if (value != "80" && value != "160" && value != "240") {
+      sendError(400, "Frequenza CPU consentita: 80, 160 o 240 MHz");
+      return;
+    }
+    const uint16_t requested = static_cast<uint16_t>(value.toInt());
+    const uint16_t previous = configStore.get().cpuFrequencyMhz;
+    configStore.mutableConfig().cpuFrequencyMhz = requested;
+    if (!configStore.saveCpuFrequency()) {
+      configStore.mutableConfig().cpuFrequencyMhz = previous;
+      sendError(500, "Impossibile salvare il profilo CPU");
+      return;
+    }
+    const bool restartRequired = requested != getCpuFrequencyMhz();
+    logSystem("info", "cpu_frequency_saved", "mhz=" + String(requested));
+    sendJson(
+      "{\"ok\":true,\"cpu_frequency_mhz\":" + String(requested) +
+      ",\"restart_required\":" + boolJson(restartRequired) + "}"
+    );
+    if (restartRequired) scheduledRestartMs = millis() + 1800;
+  });
+
   webServer.on("/api/settings/system", HTTP_POST, [] {
     if (!authorized()) return;
     const String hostname = webServer.arg("hostname");
@@ -3038,6 +3086,20 @@ void setup() {
   );
   csrfToken = csrf;
   configStore.begin(deviceSuffix);
+  const uint16_t configuredCpuFrequency = configStore.get().cpuFrequencyMhz;
+  cpuFrequencyApplied = supportedCpuFrequency(configuredCpuFrequency) &&
+    setCpuFrequencyMhz(configuredCpuFrequency) &&
+    getCpuFrequencyMhz() == configuredCpuFrequency;
+  if (!cpuFrequencyApplied) {
+    setCpuFrequencyMhz(240);
+  }
+  Serial.printf(
+    "CPU profile: %s, configured=%u MHz, actual=%u MHz, applied=%s\n",
+    cpuProfileLabel(configuredCpuFrequency),
+    configuredCpuFrequency,
+    getCpuFrequencyMhz(),
+    cpuFrequencyApplied ? "true" : "false"
+  );
 
   pinMode(kMuxReset, OUTPUT);
   digitalWrite(kMuxReset, HIGH);
@@ -3196,6 +3258,8 @@ void loop() {
     displayStatus.uptimeSeconds = now / 1000;
     displayStatus.freeHeap = ESP.getFreeHeap();
     displayStatus.chipTemperatureC = temperatureRead();
+    displayStatus.boardTemperatureC = acquisitionState.board.boardTemperatureC;
+    displayStatus.cpuFrequencyMhz = getCpuFrequencyMhz();
     displayStatus.speakerEnabled = speakerOn;
     displayStatus.speakerReady = speaker.ready();
     displayStatus.touchAvailable = display.touchAvailable();

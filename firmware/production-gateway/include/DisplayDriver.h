@@ -30,6 +30,8 @@ struct DisplayStatus {
   uint32_t uptimeSeconds = 0;
   uint32_t freeHeap = 0;
   float chipTemperatureC = 0;
+  float boardTemperatureC = 0;
+  uint16_t cpuFrequencyMhz = 240;
   bool speakerEnabled = false;
   bool speakerReady = false;
   bool touchAvailable = false;

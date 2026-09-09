@@ -154,11 +154,14 @@ USB: un OTA della precedente ESP32-C6 non può trasformare o migrare l'hardware.
 Gli esiti e la sequenza eseguita sono in
 [`../../docs/friday-hardware-validation.md`](../../docs/friday-hardware-validation.md).
 
-## Versione 2.2.5
+## Versione 2.2.6
 
 I grafici diagnostici sono ordinati cronologicamente. La pagina Sistema mostra
-uptime, istante di avvio e temperatura chip correnti. La rilevazione della
-chiusura è documentata come collaudata e resta configurabile.
+uptime, istante di avvio, temperatura interna della CPU, temperatura del QMI8658
+e frequenza CPU corrente. Dal portale si può selezionare un profilo fisso a 240,
+160 o 80 MHz; la modifica è applicata con un riavvio, viene validata e usa 240 MHz
+come fallback. Il profilo è memorizzato separatamente dalle calibrazioni. La
+rilevazione della chiusura è documentata come collaudata e resta configurabile.
 
 ## Versione 2.1.3
 

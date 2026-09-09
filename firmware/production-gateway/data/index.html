@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0e1520">
   <title>CaskLogic PesaLink</title>
   <link rel="icon" href="/casklogicmark.png">
-  <link rel="stylesheet" href="/app.css?v=2.2.5">
+  <link rel="stylesheet" href="/app.css?v=2.2.6">
 </head>
 <body>
   <div class="app-shell">
@@ -193,9 +193,14 @@
             <small id="system-booted-at">Avvio non disponibile</small>
           </article>
           <article class="metric">
-            <span>Temperatura attuale</span>
-            <strong id="system-temperature">--</strong>
-            <small>Temperatura interna del chip</small>
+            <span>Temperatura CPU</span>
+            <strong id="system-cpu-temperature">--</strong>
+            <small>Sensore interno ESP32-S3</small>
+          </article>
+          <article class="metric">
+            <span>Temperatura scheda</span>
+            <strong id="system-board-temperature">--</strong>
+            <small>Sensore interno QMI8658</small>
           </article>
         </div>
         <div class="settings-grid">
@@ -228,6 +233,13 @@
             <button class="button primary" type="submit">Salva sistema</button>
           </form>
 
+          <form class="panel form-panel" id="performance-form">
+            <div class="panel-heading"><div><p class="eyebrow">Prestazioni e temperatura</p><h2>Frequenza processore</h2></div></div>
+            <label><span>Profilo CPU</span><select name="cpu_frequency_mhz" required><option value="240">Prestazioni · 240 MHz</option><option value="160">Bilanciato · 160 MHz</option><option value="80">Bassa temperatura · 80 MHz</option></select><small>Il cambio viene applicato con un riavvio automatico. Acquisizione, Wi-Fi e periferiche restano attivi; il Light-sleep non viene utilizzato.</small></label>
+            <div class="reset-procedure" id="cpu-profile-status" aria-live="polite">Frequenza effettiva: --</div>
+            <button class="button primary" type="submit">Salva profilo CPU e riavvia</button>
+          </form>
+
 <form class="panel form-panel" id="reliability-form"><div class="panel-heading"><div><p class="eyebrow">Uso quotidiano</p><h2>Display e alimentazione</h2></div></div><label><span>Luminosità (%)</span><input name="display_brightness" type="number" min="5" max="100" step="1" required></label><label><span>Attenua dopo inattività (secondi; 0 = mai)</span><input name="display_dim_seconds" type="number" min="0" max="3600" step="1" required></label><label class="check-row"><input name="display_auto_off_enabled" type="checkbox"><span><strong>Spegni il display automaticamente</strong><small>Il touch o il tasto BOOT lo riaccendono senza interrompere pesate e rete.</small></span></label><label><span>Spegni dopo inattività (minuti)</span><input name="display_auto_off_minutes" type="number" min="1" max="1440" step="1" required></label><label><span>Avviso batteria bassa (%)</span><input name="battery_low_percent" type="number" min="5" max="50" step="1" required></label><label class="check-row"><input name="shutdown_button_enabled" type="checkbox"><span><strong>Spegnimento con tasto batteria</strong><small>Tieni premuto per 2 secondi per spegnere. Il ripristino è disponibile soltanto tenendo premuto BOOT per 10 secondi. Con USB collegata la scheda può restare alimentata.</small></span></label><hr><div class="panel-heading"><div><p class="eyebrow">Collaudata</p><h2>Chiusura della bascula</h2></div></div><span class="state-pill success">Collaudata · Configurabile</span><p>Un colpo seguito da quiete e da una lettura stabile identifica la chiusura della bascula. La funzione può lavorare in sola osservazione oppure segnalare il peso completato.</p><label class="check-row"><input name="closure_enabled" type="checkbox"><span><strong>Abilita rilevazione chiusura</strong></span></label><label class="check-row"><input name="closure_complete_weight" type="checkbox"><span><strong>Segnala “peso completato”</strong><small>Disattivato: sola osservazione. Le letture ordinarie sono sempre inviate; la conferma operatore nel gestionale rimane separata.</small></span></label><div class="ip-grid"><label><span>Soglia colpo (g)</span><input name="closure_threshold_g" type="number" min="0.05" max="4" step="0.01" required></label><label><span>Soglia quiete (g)</span><input name="closure_quiet_g" type="number" min="0.01" max="3.99" step="0.01" required></label><label><span>Quiete minima (ms)</span><input name="closure_quiet_ms" type="number" min="100" max="5000" step="1" required></label><label><span>Tempo massimo (ms)</span><input name="closure_timeout_ms" type="number" min="200" max="15000" step="1" required></label><label><span>Pausa fra rilevazioni (ms)</span><input name="closure_cooldown_ms" type="number" min="500" max="30000" step="1" required></label></div><div id="closure-live" class="reset-procedure" aria-live="polite"></div><button class="button primary" type="submit">Salva display, batteria e bascula</button></form>          <div class="panel form-panel">
             <div class="panel-heading"><div><p class="eyebrow">Manutenzione</p><h2>Firmware e diagnostica</h2></div></div>
             <dl class="details" id="system-details"></dl>
@@ -250,7 +262,8 @@
         <div class="section-heading"><div><p class="eyebrow">Ultime 24 ore</p><h2>Andamento dispositivo</h2></div><span class="state-pill neutral" id="current-availability">Corrente non disponibile</span></div>
         <div class="chart-grid">
           <article class="panel chart-panel"><header><strong>Tensione batteria</strong><span>mV</span></header><canvas id="chart-battery" height="190"></canvas></article>
-          <article class="panel chart-panel"><header><strong>Temperatura chip</strong><span>°C</span></header><canvas id="chart-temperature" height="190"></canvas></article>
+          <article class="panel chart-panel"><header><strong>Temperatura CPU ESP32-S3</strong><span>°C</span></header><canvas id="chart-temperature" height="190"></canvas></article>
+          <article class="panel chart-panel"><header><strong>Temperatura scheda QMI8658</strong><span>°C</span></header><canvas id="chart-board-temperature" height="190"></canvas></article>
           <article class="panel chart-panel"><header><strong>Segnale Wi-Fi</strong><span>dBm</span></header><canvas id="chart-rssi" height="190"></canvas></article>
           <article class="panel chart-panel"><header><strong>Memoria libera</strong><span>byte</span></header><canvas id="chart-heap" height="190"></canvas></article>
         </div>
@@ -282,6 +295,6 @@
       <div class="form-actions"><button class="button secondary" value="cancel">Annulla</button><button class="button danger" value="confirm">Conferma</button></div>
     </form>
   </dialog>
-  <script src="/app.js?v=2.2.5"></script>
+  <script src="/app.js?v=2.2.6"></script>
 </body>
 </html>

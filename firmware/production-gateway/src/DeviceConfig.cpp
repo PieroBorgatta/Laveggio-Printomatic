@@ -111,6 +111,10 @@ bool ConfigStore::begin(const String &deviceSuffix) {
   config_.batteryMinMv = preferences_.getUShort("bat_min_mv", 3200);
   config_.batteryMaxMv = preferences_.getUShort("bat_max_mv", 4200);
   config_.batteryCapacityMah = preferences_.getUShort("bat_cap_mah", 1000);
+  config_.cpuFrequencyMhz = preferences_.getUShort("cpu_mhz", 240);
+  if (config_.cpuFrequencyMhz != 80 && config_.cpuFrequencyMhz != 160 && config_.cpuFrequencyMhz != 240) {
+    config_.cpuFrequencyMhz = 240;
+  }
 
   // Aggiorna solo i vecchi valori automatici; le personalizzazioni dell'operatore restano intatte.
   if (config_.deviceId == legacyDeviceId) {
@@ -252,6 +256,7 @@ bool ConfigStore::saveSettings() {
   preferences_.putUShort("bat_min_mv", config_.batteryMinMv);
   preferences_.putUShort("bat_max_mv", config_.batteryMaxMv);
   preferences_.putUShort("bat_cap_mah", config_.batteryCapacityMah);
+  preferences_.putUShort("cpu_mhz", config_.cpuFrequencyMhz);
   preferences_.putBytes("sensor_order",config_.sensorOrder,sizeof(config_.sensorOrder));
   preferences_.putUChar("brightness",config_.displayBrightness);
   preferences_.putUShort("dim_seconds",config_.displayDimSeconds);
@@ -294,6 +299,13 @@ bool ConfigStore::saveSpeakerDefaultOn() {
 bool ConfigStore::saveSpeakerVolume() {
   preferences_.putUChar("speaker_vol", config_.speakerVolumePercent);
   return true;
+}
+
+bool ConfigStore::saveCpuFrequency() {
+  if (config_.cpuFrequencyMhz != 80 && config_.cpuFrequencyMhz != 160 && config_.cpuFrequencyMhz != 240) {
+    return false;
+  }
+  return preferences_.putUShort("cpu_mhz", config_.cpuFrequencyMhz) == sizeof(uint16_t);
 }
 
 bool ConfigStore::saveHeartbeatRestartSuppressed() {

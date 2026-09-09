@@ -530,14 +530,15 @@ void DisplayDriver::drawSystemPage(const DisplayStatus &status) {
   struct Row { const char *label; String value; uint16_t color; } rows[] = {
     {"MICROSD", status.sdReady ? "PRONTA" : "ERRORE", status.sdReady ? kGreen : kRed},
     {"MEMORIA", String(status.freeHeap / 1024) + " KB", status.freeHeap > 100000 ? kGreen : kAmber},
-    {"CPU", String(status.chipTemperatureC, 1) + " C", status.chipTemperatureC < 70 ? kGreen : kAmber},
-    {"IMU", status.imuAvailable ? "QMI8658 OK" : "NON RILEVATA", status.imuAvailable ? kGreen : kAmber},
+    {"TEMP CPU", String(status.chipTemperatureC, 1) + " C", status.chipTemperatureC < 70 ? kGreen : kAmber},
+    {"TEMP IMU", status.imuAvailable ? String(status.boardTemperatureC, 1) + " C" : "NON RILEVATA", status.imuAvailable ? kGreen : kAmber},
+    {"FREQ CPU", String(status.cpuFrequencyMhz) + " MHZ", kText},
     {"ASSETTO", status.imuAvailable ? String(status.accelerationX, 1) + "/" + String(status.accelerationY, 1) + "/" + String(status.accelerationZ, 1) + " G" : "--", kText},
     {"UPTIME", String(status.uptimeSeconds / 3600) + " H", kText},
     {"TOUCH", status.touchAvailable ? status.touchController : "NON RILEVATO", status.touchAvailable ? kGreen : kRed}
   };
-  const uint8_t first = std::min<uint8_t>(scrollRow_, 3);
-  for (uint8_t visible = 0; visible < 4 && first + visible < 7; ++visible) drawStatusRow(130 + visible * 39, rows[first + visible].label, rows[first + visible].value, rows[first + visible].color);
+  const uint8_t first = std::min<uint8_t>(scrollRow_, 4);
+  for (uint8_t visible = 0; visible < 4 && first + visible < 8; ++visible) drawStatusRow(130 + visible * 39, rows[first + visible].label, rows[first + visible].value, rows[first + visible].color);
   drawFooter();
 }
 

@@ -1,19 +1,23 @@
 # Risultati delle prove
 
-## Firmware 2.2.5 — 8 settembre 2026
+## Firmware 2.2.6 — 9 settembre 2026
 
-- `38/38` test API del simulatore superati, inclusi ordine cronologico dei
-  campioni diagnostici e indicatori di uptime e temperatura nella pagina Sistema.
+- `39/39` test API del simulatore superati, inclusi ordine cronologico dei
+  campioni diagnostici, doppia temperatura, profili CPU e conservazione delle calibrazioni.
 - Build PlatformIO V2 riuscita e immagine OTA ECDSA-P256 firmata generata e
   verificata con la chiave pubblica incorporata.
 - Portale verificato con gli asset incorporati: i grafici scorrono dal campione
   più vecchio a sinistra al più recente a destra; uptime, istante di avvio e
-  temperatura corrente sono leggibili nella pagina Sistema.
+  temperature CPU e QMI8658 e frequenza CPU sono leggibili nella pagina Sistema.
+- I profili fissi supportati sono 240, 160 e 80 MHz. La selezione viene validata,
+  applicata al riavvio e torna automaticamente a 240 MHz se non può essere applicata.
 - Il collaudo sull'impianto installato è completato: quattro AS5600, calibrazione,
   display, touch, audio, microSD, RTC, batteria, Wi-Fi e integrazione CaskLogic
   sono stati verificati nel funzionamento operativo.
 - L'aggiornamento OTA sostituisce soltanto la partizione applicativa; NVS,
   calibrazioni, configurazione di rete e dati su microSD restano invariati.
+- La frequenza selezionata usa la chiave NVS indipendente `cpu_mhz` e non passa
+  dal salvataggio del blocco `calibration_v1`.
 
 ## Firmware 2.1.3 — 6 settembre 2026
 
